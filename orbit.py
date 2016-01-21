@@ -8,7 +8,7 @@ import numpy as np
 import scipy.integrate as integ
 import matplotlib.pyplot as plt
 
-import utils 
+import utilities as utl 
 
 
 class Orbit(object):
