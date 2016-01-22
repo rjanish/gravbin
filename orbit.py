@@ -45,7 +45,7 @@ class Orbit(object):
         self.pos_i = np.asarray(pos_init)
         self.vel_i = np.asarray(vel_init)
         self.id = str(id)
-        self.binary_phi_0 = float(bin_init) % 2*np.pi
+        self.binary_phi_0 = float(bin_init) % (2*np.pi)
         self.binary_rotdir = 1.0 if bool(ccwise) else -1.0
         self.mr = float(massratio)
         if self.mr < 0.5 or self.mr > 1:
