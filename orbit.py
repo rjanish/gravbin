@@ -68,31 +68,40 @@ class Orbit(object):
             # discrete rotation to put binary along x-axis
         self.corot_pos_i = self.pos_i.copy()  
         self.corot_pos_i = utl.rotate2d(self.corot_pos_i,
-                                        self.binary_phi_0, form='cart')  
+                                        -self.binary_phi_0, form='cart')  
         self.corot_vel_i = self.vel_i.copy()  
         self.corot_vel_i = utl.rotate2d(self.corot_vel_i,
-                                        self.binary_phi_0, form='cart')
+                                        -self.binary_phi_0, form='cart')
             # velocity shift into frame rotating with binary frequency
         self.corot_vel_i[0] +=  self.corot_pos_i[1]*self.binary_rotdir
         self.corot_vel_i[1] += -self.corot_pos_i[0]*self.binary_rotdir
         self.corot_state_i = np.concatenate((self.corot_pos_i,
                                              self.corot_vel_i)) 
+        
+    def distances(self, x, y, z):
+        """
+        Compute the inverse cubic distance to each binary member.
+        See 'theory.md' for derivation and conventions.
 
-## EVERYTHING BELOW HERE UNCHECKED FOR CARTESIAN SOLUTIONS ##
+        Args: 
+        x, y, z - floats
+          Current Cartesian orbiter position in co-rotating frame,
+          normalized by binary separation
 
-#   def deltas(self, r, phi, z):
-#       """
-#       Compute the inverse cubic distance factors for D_ode.
-#       See 'theory.md' for derivation and conventions.
-#       """
-#       pythagoras_part = 0.25 + z**2 + r**2
-#       crossterm = r*np.cos(phi)
-#       d1_inv3 = (pythagoras_part - crossterm)**(-1.5)  # \Delta_1^{-3}
-#       d2_inv3 = (pythagoras_part + crossterm)**(-1.5)  # \Delta_2^{-3}
-#       scale_factor = 2*(np.pi**2)
-#       dp_inv3 = (d2_inv3 + d1_inv3)*scale_factor
-#       dm_inv3 = (d2_inv3 - d1_inv3)*scale_factor
-#       return dp_inv3, dm_inv3
+        Returns: delta_h, delta_l 
+        delta_h - float
+            inverse cube of distance to heavier binary member
+        delta_l - float
+            inverse cube of distance to lighter binary member
+        """
+        offaxis = y**2 + z**2
+        dsq_heavy = (1 - self.massratio - x)**2 + offaxis
+           # distance-squared to more massive binary member
+        delta_heavy = dsq_heavy**(-1.5)
+        dsq_light = (self.massratio + x)**2 + offaxis
+           # distance-squared to lighter binary member
+        delta_light = dsq_light**(-1.5)
+        return delta_heavy, delta_light
 
 #   def D_ode(self, state, time):
 #       """
