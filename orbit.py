@@ -77,8 +77,8 @@ class Orbit(object):
         self.corot_vel_i[1] += -self.corot_pos_i[0]*self.binary_rotdir
         self.corot_state_i = np.concatenate((self.corot_pos_i,
                                              self.corot_vel_i)) 
-        
-    def distances(self, x, y, z):
+
+    def distance_factors(self, x, y, z):
         """
         Compute the inverse cubic distance to each binary member.
         See 'theory.md' for derivation and conventions.
@@ -103,22 +103,24 @@ class Orbit(object):
         delta_light = dsq_light**(-1.5)
         return delta_heavy, delta_light
 
-#   def D_ode(self, state, time):
-#       """
-#       This is the derivative function D[state, t] defining the ODE system
-#       for the projectile orbit via D[state] = ode(state).
-
-#       state is the concatenation of positions and velocities:
-#           state = (r, phi, z, v_r, v_phi, v_z)
-#       """
-#       r, phi, z, r_t, phi_t, z_t = state
-#       dp_inv3, dm_inv3 = self.deltas(r, phi, z)
-#       D_r, D_phi, D_z = r_t, phi_t, z_t
-#       w_norm = self.binary_rotdir*(2*np.pi)
-#       D_r_t = -r*dp_inv3 - 0.5*np.cos(phi)*dm_inv3 + r*(phi_t + w_norm)**2
-#       D_phi_t = (0.5*np.sin(phi)*dm_inv3 - 2*r_t*(phi_t + w_norm))/r
-#       D_z_t = -z*dp_inv3
-#       return np.asarray([D_r, D_phi, D_z, D_r_t, D_phi_t, D_z_t])
+    def D_ode(self, state, time):
+        """
+        This is the derivative function D[state, t] which determines
+        orbits via ODE D[state] = D_ode(state).
+  
+        The state is the concatenation of positions and velocities:
+            state = (x, y, z, v_x, v_y, v_z)
+        """
+        x, y, z, v_x, v_y, v_z = state
+        delta_heavy, delta_light = self.distance_factors(x, y, z)
+        Dv_x = (2*self.binary_rotdir*v_y + x +
+                delta_heavy*self.massratio*(1 - self.massratio - x) -
+                delta_light*(1 - self.massratio)*(self.massratio + x))
+        offaxis_forceperdist = (delta_heavy*self.massratio +
+                                delta_light*(1 - self.massratio))
+        Dv_y = -2*self.binary_rotdir*v_x + y - offaxis_forceperdist*y
+        Dv_z = -offaxis_forceperdist*z
+        return np.asarray([v_x, v_y, v_z, Dv_x, Dv_y, Dv_z])
 
 #   def evolve(self, times):
 #       """
