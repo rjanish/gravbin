@@ -77,45 +77,31 @@ class Orbit(object):
         self.corot_vel_i[1] += -self.corot_pos_i[0]*self.binary_rotdir
         self.corot_state_i = np.concatenate((self.corot_pos_i,
                                              self.corot_vel_i)) 
-
-    def distance_factors(self, x, y, z):
-        """
-        Compute the inverse cubic distance to each binary member.
-        See 'theory.md' for derivation and conventions.
-
-        Args: 
-        x, y, z - floats
-          Current Cartesian orbiter position in co-rotating frame,
-          normalized by binary separation
-
-        Returns: delta_h, delta_l 
-        delta_h - float
-            inverse cube of distance to heavier binary member
-        delta_l - float
-            inverse cube of distance to lighter binary member
-        """
-        offaxis = y**2 + z**2
-        dsq_heavy = (1 - self.massratio - x)**2 + offaxis
-           # distance-squared to more massive binary member
-        delta_heavy = dsq_heavy**(-1.5)
-        dsq_light = (self.massratio + x)**2 + offaxis
-           # distance-squared to lighter binary member
-        delta_light = dsq_light**(-1.5)
-        return delta_heavy, delta_light
-
+        
     def D_ode(self, state, time):
         """
-        This is the derivative function D[state, t] which determines
-        orbits via ODE D[state] = D_ode(state).
-  
-        The state is the concatenation of positions and velocities:
-            state = (x, y, z, v_x, v_y, v_z)
+        This is the derivative function D_ode(state, t) which
+        determines orbits via ODE D[state] = D_ode(state).  
+        The state is the concatenation of positions and
+        velocities: (x, y, z, v_x, v_y, v_z).
+
+        See theory.md for derivation and coordinate system.
         """
         x, y, z, v_x, v_y, v_z = state
-        delta_heavy, delta_light = self.distance_factors(x, y, z)
+        # compute distance factors
+        dsq_offaxis = y**2 + z**2
+        d_heavy = 1 - self.massratio - x 
+            # distance along binary axis to more massive binary member
+        dsq_heavy = d_heavy**2 + offaxis
+            # distance-squared to more massive binary member
+        delta_heavy = dsq_heavy**(-1.5)
+        d_light = self.massratio + x  # as above, to less massive member
+        dsq_light = d_light**2 + offaxis
+        delta_light = dsq_light**(-1.5)
+        # compute accelerations
         Dv_x = (2*self.binary_rotdir*v_y + x +
-                delta_heavy*self.massratio*(1 - self.massratio - x) -
-                delta_light*(1 - self.massratio)*(self.massratio + x))
+                delta_heavy*self.massratio*d_heavy -
+                delta_light*(1 - self.massratio)*d_light)
         offaxis_forceperdist = (delta_heavy*self.massratio +
                                 delta_light*(1 - self.massratio))
         Dv_y = -2*self.binary_rotdir*v_x + y - offaxis_forceperdist*y
