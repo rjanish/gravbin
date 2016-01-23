@@ -66,18 +66,18 @@ class Orbit(object):
         # Compute initial states in co-rotating binary frame - see theory.md
         # for complete description of this coordinate system.
             # discrete rotation to put binary along x-axis
-        self.corot_pos_i = self.pos_i.copy()  
-        self.corot_pos_i = utl.rotate2d(self.corot_pos_i,
+        self.corot_pos_0 = self.pos_i.copy()  
+        self.corot_pos_0 = utl.rotate2d(self.corot_pos_0,
                                         -self.binary_phi_0, form='cart')  
-        self.corot_vel_i = self.vel_i.copy()  
-        self.corot_vel_i = utl.rotate2d(self.corot_vel_i,
+        self.corot_vel_0 = self.vel_i.copy()  
+        self.corot_vel_0 = utl.rotate2d(self.corot_vel_0,
                                         -self.binary_phi_0, form='cart')
             # velocity shift into frame rotating with binary frequency
-        self.corot_vel_i[0] +=  self.corot_pos_i[1]*self.binary_rotdir
-        self.corot_vel_i[1] += -self.corot_pos_i[0]*self.binary_rotdir
-        self.corot_state_i = np.concatenate((self.corot_pos_i,
-                                             self.corot_vel_i)) 
-        
+        self.corot_vel_0[0] +=  self.corot_pos_0[1]*self.binary_rotdir
+        self.corot_vel_0[1] += -self.corot_pos_0[0]*self.binary_rotdir
+        self.corot_state_0 = np.concatenate((self.corot_pos_0,
+                                             self.corot_vel_0)) 
+
     def D_ode(self, state, time):
         """
         This is the derivative function D_ode(state, t) which
@@ -108,57 +108,59 @@ class Orbit(object):
         Dv_z = -offaxis_forceperdist*z
         return np.asarray([v_x, v_y, v_z, Dv_x, Dv_y, Dv_z])
 
-#   def evolve(self, times):
-#       """
-#       Evolve the projectile orbit over all times points given
-#       in the passed times array. times[0] must be zero. 
+    def evolve(self, times):
+        """
+        Evolve the projectile orbit over all times points given
+        in the passed times array. times[0] must be zero. 
+            Output will be stored in attributes as:
+            X.corot_pos - Cartesian position with time in co-rotating frame
+            X.corot_vel - Cartesian velocity with time in co-rotating frame
+            X.pos - Cartesian position with time in inertial frame
+            X.vel - Cartesian velocity with time in inertial frame
+            X.run_stats - internal integrator statistics
+        """
+        times = np.asarray(times)
+        corot_states, run_stats = integ.odeint(func=self.D_ode,
+                                               y0=self.corot_state_0,
+                                               t=times, mxstep=10000,
+                                               full_output=True)
+        self.run_stats = run_stats
+        self.corot_pos = corot_states[:, :3]
+        self.corot_vel = corot_states[:, 3:]
+        # convert to inertial frame
+        self.pos = np.full(self.corot_pos.shape, np.nan)
+        self.pos[:, 2] = self.corot_pos[:, 2]
+        self.pos[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
+                                       times, form='cart')
 
-#       Output will be stored in attributes as:
-#           X.corot_states - orbital state (pos concatenated with vel) as
-#               a function of time in the binary co-rotating frame
-#           X.states - orbital state with time in inertial COM frame
-#           X.run_stats - internal integrator statistics
-#           X.pos_polar - position with time in polar coordinates
-#           X.vel_polar - velocity with time in polar coordinates
-#           X.pos_cart - position with time in Cartesian coordinates
-#           X.vel_cart - velocity with time in Cartesian coordinates
-#       """
-#       times = np.asarray(times)
-#       corot_states, run_stats = integ.odeint(func=self.D_ode,
-#                                              y0=self.corot_state_i,
-#                                              t=times, mxstep=10000,
-#                                              full_output=True)
-#       self.corot_states = corot_states.T  # (orbital states, time)
-#       self.run_stats = run_stats
-#       # process results
-#       states = self.corot_states.copy()  # go to inertial frame
-#       states[1, :] = states[1, :] + self.binary_rotdir*2*np.pi*times + self.binary_phi_0
-#       states[4, :] = states[4, :] + self.binary_rotdir*2*np.pi
-#       self.times = times.copy()
-#       self.states = states
-#       self.pos_polar = self.states[:3, :]
-#       self.vel_polar = self.states[3:, :]
-#       self.pos_cart = np.zeros(self.pos_polar.shape)
-#       self.pos_cart[0] = self.pos_polar[0]*np.cos(self.pos_polar[1])
-#       self.pos_cart[1] = self.pos_polar[0]*np.sin(self.pos_polar[1])
-#       self.pos_cart[2] = self.pos_polar[2]
-#       self.vel_cart = np.zeros(self.pos_cart.shape)
-#       self.vel_cart[0] = (
-#           self.vel_polar[0]*np.cos(self.pos_polar[1]) -
-#           self.pos_polar[0]*self.vel_polar[1]*np.sin(self.pos_polar[1]))
-#       self.vel_cart[1] = (
-#           self.vel_polar[0]*np.sin(self.pos_polar[1]) +
-#           self.pos_polar[0]*self.vel_polar[1]*np.cos(self.pos_polar[1]))
-#       self.vel_cart[2] = self.vel_polar[2]
-#       # save binary positions (only for 1 - other at phi + pi)
-#       self.bin_pos_polar = np.zeros(self.pos_polar.shape)
-#       self.bin_pos_polar[0] = 1.0
-#       self.bin_pos_polar[1] = self.binary_phi_0 + self.binary_rotdir*2*np.pi*times
-#       self.bin_pos_polar[2] = 0.0
-#       self.bin_pos_cart = np.zeros(self.bin_pos_polar.shape)
-#       self.bin_pos_cart[0] = np.cos(self.bin_pos_polar[1])
-#       self.bin_pos_cart[1] = np.sin(self.bin_pos_polar[1])
-#       self.bin_pos_cart[2] = 0.0
+        states = self.corot_states.copy() 
+        states[1, :] = states[1, :] + self.binary_rotdir*2*np.pi*times + self.binary_phi_0
+        states[4, :] = states[4, :] + self.binary_rotdir*2*np.pi
+        self.times = times.copy()
+        self.states = states
+        self.pos_polar = self.states[:3, :]
+        self.vel_polar = self.states[3:, :]
+        self.pos_cart = np.zeros(self.pos_polar.shape)
+        self.pos_cart[0] = self.pos_polar[0]*np.cos(self.pos_polar[1])
+        self.pos_cart[1] = self.pos_polar[0]*np.sin(self.pos_polar[1])
+        self.pos_cart[2] = self.pos_polar[2]
+        self.vel_cart = np.zeros(self.pos_cart.shape)
+        self.vel_cart[0] = (
+            self.vel_polar[0]*np.cos(self.pos_polar[1]) -
+            self.pos_polar[0]*self.vel_polar[1]*np.sin(self.pos_polar[1]))
+        self.vel_cart[1] = (
+            self.vel_polar[0]*np.sin(self.pos_polar[1]) +
+            self.pos_polar[0]*self.vel_polar[1]*np.cos(self.pos_polar[1]))
+        self.vel_cart[2] = self.vel_polar[2]
+        # save binary positions (only for 1 - other at phi + pi)
+        self.bin_pos_polar = np.zeros(self.pos_polar.shape)
+        self.bin_pos_polar[0] = 1.0
+        self.bin_pos_polar[1] = self.binary_phi_0 + self.binary_rotdir*2*np.pi*times
+        self.bin_pos_polar[2] = 0.0
+        self.bin_pos_cart = np.zeros(self.bin_pos_polar.shape)
+        self.bin_pos_cart[0] = np.cos(self.bin_pos_polar[1])
+        self.bin_pos_cart[1] = np.sin(self.bin_pos_polar[1])
+        self.bin_pos_cart[2] = 0.0
 
 
 # def plot_trajectory(orbit, ax=None, marker='.', linestyle='-',
