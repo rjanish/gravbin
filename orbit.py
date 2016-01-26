@@ -92,11 +92,11 @@ class Orbit(object):
         dsq_offaxis = y**2 + z**2
         d_heavy = 1 - self.mr - x 
             # distance along binary axis to more massive binary member        
-        dsq_heavy = d_heavy**2 + offaxis
+        dsq_heavy = d_heavy**2 + dsq_offaxis
             # distance-squared to more massive binary member
         delta_heavy = dsq_heavy**(-1.5)
         d_light = self.mr + x  # as above, to less massive member
-        dsq_light = d_light**2 + offaxis
+        dsq_light = d_light**2 + dsq_offaxis
         delta_light = dsq_light**(-1.5)
         # compute accelerations
         Dv_x = (2*self.binary_rotdir*v_y + x +
