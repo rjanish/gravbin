@@ -88,22 +88,21 @@ class Orbit(object):
         See theory.md for derivation and coordinate system.
         """
         x, y, z, v_x, v_y, v_z = state
-        # compute distance factors
+        # compute -distance factors
         dsq_offaxis = y**2 + z**2
-        d_heavy = 1 - self.massratio - x 
-            # distance along binary axis to more massive binary member
+        d_heavy = 1 - self.mr - x 
+            # distance along binary axis to more massive binary member        
         dsq_heavy = d_heavy**2 + offaxis
             # distance-squared to more massive binary member
         delta_heavy = dsq_heavy**(-1.5)
-        d_light = self.massratio + x  # as above, to less massive member
+        d_light = self.mr + x  # as above, to less massive member
         dsq_light = d_light**2 + offaxis
         delta_light = dsq_light**(-1.5)
         # compute accelerations
         Dv_x = (2*self.binary_rotdir*v_y + x +
-                delta_heavy*self.massratio*d_heavy -
-                delta_light*(1 - self.massratio)*d_light)
-        offaxis_forceperdist = (delta_heavy*self.massratio +
-                                delta_light*(1 - self.massratio))
+                delta_heavy*self.mr*d_heavy -
+                delta_light*(1 - self.mr)*d_light)
+        offaxis_forceperdist = delta_heavy*self.mr + delta_light*(1 - self.mr)
         Dv_y = -2*self.binary_rotdir*v_x + y - offaxis_forceperdist*y
         Dv_z = -offaxis_forceperdist*z
         return np.asarray([v_x, v_y, v_z, Dv_x, Dv_y, Dv_z])
