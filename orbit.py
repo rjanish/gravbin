@@ -42,8 +42,8 @@ class Orbit(object):
         id - stringable
             Label for the orbit 
         """
-        self.pos_i = np.asarray(pos_init)
-        self.vel_i = np.asarray(vel_init)
+        self.pos_0 = np.asarray(pos_init)
+        self.vel_0 = np.asarray(vel_init)
         self.id = str(id)
         self.binary_phi_0 = float(bin_init) % (2*np.pi)
         self.binary_rotdir = 1.0 if bool(ccwise) else -1.0
@@ -56,7 +56,7 @@ class Orbit(object):
                "  x = {0[0]:0.3f}  v_x = {1[0]:0.3f}\n"
                "  y = {0[1]:0.3f}  v_y = {1[1]:0.3f}\n"
                "  z = {0[2]:0.3f}  v_z = {1[2]:0.3f}"
-               "".format(self.pos_i, self.vel_i))
+               "".format(self.pos_0, self.vel_0))
         print ("with binary initialized at\n"
                "  phi = {:0.3f}\n"
                "  rotation: {} (viewed from +z)\n"
@@ -66,12 +66,14 @@ class Orbit(object):
         # Compute initial states in co-rotating binary frame - see theory.md
         # for complete description of this coordinate system.
             # discrete rotation to put binary along x-axis
-        self.corot_pos_0 = self.pos_i.copy()  
-        self.corot_pos_0 = utl.rotate2d(self.corot_pos_0,
-                                        -self.binary_phi_0, form='cart')  
-        self.corot_vel_0 = self.vel_i.copy()  
-        self.corot_vel_0 = utl.rotate2d(self.corot_vel_0,
-                                        -self.binary_phi_0, form='cart')
+        self.corot_pos_0 = np.full(self.pos_0.shape, np.nan)
+        self.corot_pos_0[2] = self.pos_0[2]  # z coordinate unchanged 
+        self.corot_pos_0[:2] = utl.rotate2d(self.pos_0[:2],
+                                            -self.binary_phi_0, form='cart')
+        self.corot_vel_0 = np.full(self.vel_0.shape, np.nan)
+        self.corot_vel_0[2] = self.vel_0[2]
+        self.corot_vel_0[:2] = utl.rotate2d(self.vel_0[:2],
+                                            -self.binary_phi_0, form='cart')
             # velocity shift into frame rotating with binary frequency
         self.corot_vel_0[0] +=  self.corot_pos_0[1]*self.binary_rotdir
         self.corot_vel_0[1] += -self.corot_pos_0[0]*self.binary_rotdir
