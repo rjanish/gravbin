@@ -132,37 +132,13 @@ class Orbit(object):
         self.pos = np.full(self.corot_pos.shape, np.nan)
         self.pos[:, 2] = self.corot_pos[:, 2]
         self.pos[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
-                                       times, form='cart')
-
-        states = self.corot_states.copy() 
-        states[1, :] = states[1, :] + self.binary_rotdir*2*np.pi*times + self.binary_phi_0
-        states[4, :] = states[4, :] + self.binary_rotdir*2*np.pi
-        self.times = times.copy()
-        self.states = states
-        self.pos_polar = self.states[:3, :]
-        self.vel_polar = self.states[3:, :]
-        self.pos_cart = np.zeros(self.pos_polar.shape)
-        self.pos_cart[0] = self.pos_polar[0]*np.cos(self.pos_polar[1])
-        self.pos_cart[1] = self.pos_polar[0]*np.sin(self.pos_polar[1])
-        self.pos_cart[2] = self.pos_polar[2]
-        self.vel_cart = np.zeros(self.pos_cart.shape)
-        self.vel_cart[0] = (
-            self.vel_polar[0]*np.cos(self.pos_polar[1]) -
-            self.pos_polar[0]*self.vel_polar[1]*np.sin(self.pos_polar[1]))
-        self.vel_cart[1] = (
-            self.vel_polar[0]*np.sin(self.pos_polar[1]) +
-            self.pos_polar[0]*self.vel_polar[1]*np.cos(self.pos_polar[1]))
-        self.vel_cart[2] = self.vel_polar[2]
-        # save binary positions (only for 1 - other at phi + pi)
-        self.bin_pos_polar = np.zeros(self.pos_polar.shape)
-        self.bin_pos_polar[0] = 1.0
-        self.bin_pos_polar[1] = self.binary_phi_0 + self.binary_rotdir*2*np.pi*times
-        self.bin_pos_polar[2] = 0.0
-        self.bin_pos_cart = np.zeros(self.bin_pos_polar.shape)
-        self.bin_pos_cart[0] = np.cos(self.bin_pos_polar[1])
-        self.bin_pos_cart[1] = np.sin(self.bin_pos_polar[1])
-        self.bin_pos_cart[2] = 0.0
-
+                                       times + self.binary_phi_0, form='cart')
+        self.vel = np.full(self.corot_vel.shape, np.nan)
+        self.vel[:, 2] = self.corot_vel[:, 2]
+        self.vel[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
+                                       times + self.binary_phi_0, form='cart')
+        self.vel[:, 0] += -self.pos[:, 1]*self.binary_rotdir
+        self.vel[:, 1] +=  self.pos[:, 0]*self.binary_rotdir
 
 # def plot_trajectory(orbit, ax=None, marker='.', linestyle='-',
 #                   alpha=0.6, label=None):
