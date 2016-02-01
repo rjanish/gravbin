@@ -140,22 +140,57 @@ class Orbit(object):
         self.vel[:, 0] += -self.pos[:, 1]*self.binary_rotdir
         self.vel[:, 1] +=  self.pos[:, 0]*self.binary_rotdir
 
-# def plot_trajectory(orbit, ax=None, marker='.', linestyle='-',
-#                   alpha=0.6, label=None):
-#   """
-#   Plot the trajectory of the passed orbit onto the given matplotlib axes.
-#   """
-#   if ax is None:
-#       fig, ax = plt.subplots()
-#   if label is None:
-#       label = orbit.id
-#   ax.plot(orbit.pos_cart[0], orbit.pos_cart[1], marker=marker,
-#           linestyle=linestyle, alpha=alpha, label=label)
-#   binary_trajectory = plt.Circle((0, 0), 1.0, facecolor='none',
-#                                  edgecolor='k', alpha=0.8)
-#   ax.add_artist(binary_trajectory)
-#   ax.set_aspect("equal")
-#   return ax
+
+def plot_orbit_inertial(orbit, ax=None, **kwargs):
+  """
+  Plot the trajectory of the given orbit as seen in the inertial frame. 
+
+  The orbit will be drawn onto the passed matplotlib axes, or the axis of 
+  a new figure if none is given. Any maplotilb line attribute kwargs will
+  be used to draw the orbit trajectory. The binaries orbit circles are
+  drawn as a grayed solid lines with opacity ~ mass. The binary
+  center-of-mass is marked by a single black dot.   
+  """
+  if ax is None:
+      fig, ax = plt.subplots()
+  ax.plot(orbit.pos[0], orbit.pos[1], **kwargs)
+  heavy_transp = 0.8
+  light_transp = heavy_transp*(1.0/orbit.mr - 1.0)
+      # light_transp/heavy_transp = lighter_mass/heavier_mass 
+  heavy_binary_track = plt.Circle((0, 0), 1.0 - orbit.mr, facecolor='none',
+                                 edgecolor='k', alpha=heavy_transp)
+  light_binary_track = plt.Circle((0, 0), orbit.mr, facecolor='none',
+                                 edgecolor='k', alpha=light_transp)
+  ax.add_artist(heavy_binary_track)
+  ax.add_artist(light_binary_track)
+  ax.plot(*[0, 0], color='k', marker='.', linestyle='', alpha=1.0)
+  ax.set_aspect("equal")
+  return ax
+
+
+def plot_orbit_corotating(orbit, ax=None, **kwargs):
+  """
+  Plot the trajectory of the given orbit as seen in the co-rotating frame. 
+
+  The orbit will be drawn onto the passed matplotlib axes, or the axis of 
+  a new figure if none is given. Any maplotilb line attribute kwargs will
+  be used to draw the orbit trajectory. The binaries positions are given
+  by grayed dots with opacity ~ mass. The binary center-of-mass is marked
+  by a single black dot. 
+  """
+  if ax is None:
+      fig, ax = plt.subplots()
+  ax.plot(orbit.corot_pos[0], orbit.corot_pos[1], **kwargs)
+  heavy_transp = 0.8
+  light_transp = heavy_transp*(1.0/orbit.mr - 1.0)
+      # light_transp/heavy_transp = lighter_mass/heavier_mass 
+  heavy_pos = [1.0 - orbit.mr, 0.0]
+  light_pos = [orbit.mr, 0.0]
+  ax.plot(*heavy_pos, color='k', marker='o', linestyle='', alpha=heavy_transp)
+  ax.plot(*light_pos, color='k', marker='o', linestyle='', alpha=light_transp)
+  ax.plot(*[0, 0], color='k', marker='.', linestyle='', alpha=1.0)
+  ax.set_aspect("equal")
+  return ax
 
 
 # def test_orbit(pos_init, vel_init, bin_init, ccwise, cycles=3, res=100):
