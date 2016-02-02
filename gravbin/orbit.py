@@ -62,7 +62,7 @@ class Orbit(object):
                "  phi = {:0.3f}\n"
                "  rotation: {} (viewed from +z)\n"
                "".format(self.binary_angle_0,
-                         "CCW" if self.binary_rotdir else "CW"))
+                         "CCW" if self.binary_rotdir > 0.0 else "CW"))
         print "(in binary COM inertial frame)\n"
         # Compute initial states in co-rotating binary frame - see theory.md
         # for complete description of this coordinate system.
@@ -134,11 +134,11 @@ class Orbit(object):
         self.pos = np.full(self.corot_pos.shape, np.nan)
         self.pos[:, 2] = self.corot_pos[:, 2]
         self.pos[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
-                                       times + self.binary_angle_0, form='cart')
+                                       self.binary_angle, form='cart')
         self.vel = np.full(self.corot_vel.shape, np.nan)
         self.vel[:, 2] = self.corot_vel[:, 2]
-        self.vel[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
-                                       times + self.binary_angle_0, form='cart')
+        self.vel[:, :2] = utl.rotate2d(self.corot_vel[:, :2], 
+                                       self.binary_angle, form='cart')
         self.vel[:, 0] += -self.pos[:, 1]*self.binary_rotdir
         self.vel[:, 1] +=  self.pos[:, 0]*self.binary_rotdir
 
@@ -186,9 +186,8 @@ def plot_orbit_corotating(orbit, ax=None, **kwargs):
   light_transp = heavy_transp*(1.0/orbit.mr - 1.0)
       # light_transp/heavy_transp = lighter_mass/heavier_mass 
   heavy_pos = [1.0 - orbit.mr, 0.0]
-  light_pos = [orbit.mr, 0.0]
+  light_pos = [-orbit.mr, 0.0]
   ax.plot(*heavy_pos, color='k', marker='o', linestyle='', alpha=heavy_transp)
   ax.plot(*light_pos, color='k', marker='o', linestyle='', alpha=light_transp)
   ax.plot(*[0, 0], color='k', marker='.', linestyle='', alpha=1.0)
-  ax.set_aspect("equal")
   return ax
