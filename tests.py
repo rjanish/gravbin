@@ -32,10 +32,10 @@ def test_orbit(pos_init, vel_init, massratio, cycles, id='test', res=10**3):
     return orbit
 
 
-def test_timereversal(pos_init, vel_init, massratio,
-                      cycles, res=10**3, id='test_timereversal'):
+def run_timereversed_pair(pos_init, vel_init, massratio,
+                          cycles, res=10**3, id='test_timereversal'):
     """
-    Verify time-reversal symmetry of orbit solutions.
+    Compute a time-reversed pair of orbits.
 
     A projectile with the given initial conditions will be evolved
     forward for the given number of binary periods, and then evolved
@@ -61,10 +61,4 @@ def test_timereversal(pos_init, vel_init, massratio,
                           backward_bin_init, backward_ccwise,
                           massratio, '{}-backward'.format(id))
     backward.evolve(times)
-    fig, ax = plt.subplots()
-    gbin.plot_orbit_inertial(forward,  ax, marker='o', linestyle='', 
-                             alpha=0.5, color='b', label='forward')
-    gbin.plot_orbit_inertial(backward, ax, marker='.', linestyle='', 
-                             alpha=0.8, color='r', label='backward')
-    plt.show()
     return forward, backward
