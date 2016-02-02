@@ -19,7 +19,8 @@ class Orbit(object):
     Distance is measured in units of the binary separation, and time in units
     of the binary period. See 'theory.md' for coordinate system and discussion.
     """
-    def __init__(self, pos_init, vel_init, bin_init, ccwise, massratio, id):
+    def __init__(self, pos_init, vel_init, binary_angle_init,
+                 binary_ccwise, binary_massratio, id):
         """
         Set the initial state of the binary and projectile. Inputs are to be
         given in the inertial COM frame of the binary, using Cartesian
@@ -30,13 +31,13 @@ class Orbit(object):
             Initial position of projectile, (x, y, z)
         vel_init - ndarraylike, shape (3,)
             Initial velocity of projectile, (v_x, v_y, v_z)
-        bin_init - float
+        binary_angle_init - float
             Initial position of the binary, phi
             (angle of the more-massive binary star in the xy-plane)
-        ccwise - bool
+        binary_ccwise - bool
             Rotation direction of binary - True if counterclockwise
             and False if clockwise, as viewed from +z direction. 
-        massratio - float, in interval [0.5, 1]
+        binary_massratio - float, in interval [0.5, 1]
             The ratio of the mass of the largest star
             in the binary to the total mass of the binary. 
         id - stringable
@@ -45,9 +46,9 @@ class Orbit(object):
         self.pos_0 = np.asarray(pos_init)
         self.vel_0 = np.asarray(vel_init)
         self.id = str(id)
-        self.binary_phi_0 = float(bin_init) % (2*np.pi)
-        self.binary_rotdir = 1.0 if bool(ccwise) else -1.0
-        self.mr = float(massratio)
+        self.binary_angle_0 = float(binary_angle_init) % (2*np.pi)
+        self.binary_rotdir = 1.0 if bool(binary_ccwise) else -1.0
+        self.mr = float(binary_massratio)
         if self.mr < 0.5 or self.mr > 1:
             raise ValueError("Invalid mass ratio: {}. Mass ratio "
                              "must be between 0.5 and 1".format(self.mr))
@@ -60,7 +61,7 @@ class Orbit(object):
         print ("with binary initialized at\n"
                "  phi = {:0.3f}\n"
                "  rotation: {} (viewed from +z)\n"
-               "".format(self.binary_phi_0,
+               "".format(self.binary_angle_0,
                          "CCW" if self.binary_rotdir else "CW"))
         print "(in binary COM inertial frame)\n"
         # Compute initial states in co-rotating binary frame - see theory.md
@@ -69,11 +70,11 @@ class Orbit(object):
         self.corot_pos_0 = np.full(self.pos_0.shape, np.nan)
         self.corot_pos_0[2] = self.pos_0[2]  # z coordinate unchanged 
         self.corot_pos_0[:2] = utl.rotate2d(self.pos_0[:2],
-                                            -self.binary_phi_0, form='cart')
+                                            -self.binary_angle_0, form='cart')
         self.corot_vel_0 = np.full(self.vel_0.shape, np.nan)
         self.corot_vel_0[2] = self.vel_0[2]
         self.corot_vel_0[:2] = utl.rotate2d(self.vel_0[:2],
-                                            -self.binary_phi_0, form='cart')
+                                            -self.binary_angle_0, form='cart')
             # velocity shift into frame rotating with binary frequency
         self.corot_vel_0[0] +=  self.corot_pos_0[1]*self.binary_rotdir
         self.corot_vel_0[1] += -self.corot_pos_0[0]*self.binary_rotdir
@@ -128,15 +129,16 @@ class Orbit(object):
         self.run_stats = run_stats
         self.corot_pos = corot_states[:, :3]
         self.corot_vel = corot_states[:, 3:]
+        self.binary_angle = self.binary_angle_0 + self.binary_rotdir*times
         # convert to inertial frame
         self.pos = np.full(self.corot_pos.shape, np.nan)
         self.pos[:, 2] = self.corot_pos[:, 2]
         self.pos[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
-                                       times + self.binary_phi_0, form='cart')
+                                       times + self.binary_angle_0, form='cart')
         self.vel = np.full(self.corot_vel.shape, np.nan)
         self.vel[:, 2] = self.corot_vel[:, 2]
         self.vel[:, :2] = utl.rotate2d(self.corot_pos[:, :2], 
-                                       times + self.binary_phi_0, form='cart')
+                                       times + self.binary_angle_0, form='cart')
         self.vel[:, 0] += -self.pos[:, 1]*self.binary_rotdir
         self.vel[:, 1] +=  self.pos[:, 0]*self.binary_rotdir
 
