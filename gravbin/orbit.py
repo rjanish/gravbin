@@ -164,7 +164,6 @@ def plot_orbit_inertial(orbit, ax=None, **kwargs):
   ax.add_artist(heavy_binary_track)
   ax.add_artist(light_binary_track)
   ax.plot(*[0, 0], color='k', marker='.', linestyle='', alpha=1.0)
-  ax.set_aspect("equal")
   return ax
 
 
