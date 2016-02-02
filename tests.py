@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import gravbin as gbin
 
 
-def test_orbit(pos_init, vel_init, massratio, cycles, id='test', res=10**4):
+def test_orbit(pos_init, vel_init, massratio, cycles, id='test', res=10**3):
     """
     This is a quick visual check of orbits. 
 
@@ -32,27 +32,39 @@ def test_orbit(pos_init, vel_init, massratio, cycles, id='test', res=10**4):
     return orbit
 
 
-# def test_timereversal(pos_init, vel_init, cycles, res):
-#   """
-#   Verify time-reversal symmetry of orbit solutions by computing
-#   evolving the projectile forward and then backward to starting point.
-#   """
-#   t = np.linspace(0, cycles, cycles*res)
-#   forward = gbin.Orbit(pos_init, vel_init, 0, True, 'forward') # counterclockwise
-#   forward.evolve(t)
-#   final_state = forward.states[:, -1]
-#   final_binary_phi = forward.bin_pos_polar[1, -1]
-#   backward = gbin.Orbit(final_state[:3], -final_state[3:],
-#                    final_binary_phi, False, 'backward') # clockwise
-#   backward.evolve(t)
-#   delta_pos = np.sqrt(np.sum((backward.pos_cart[:, -1] -
-#                               forward.pos_cart[:, 0])**2))
-#   delta_vel = np.sqrt(np.sum((backward.vel_cart[:, -1] +
-#                               forward.vel_cart[:, 0])**2))
-#   print "delta_pos = {}".format(delta_pos)
-#   print "delta_vel = {}".format(delta_vel)
-#   fig, ax = plt.subplots()
-#   plot_trajectory(forward,  ax, marker='', linestyle='-', alpha=0.8)
-#   plot_trajectory(backward, ax, marker='.', linestyle='', alpha=0.6)
-#   plt.show()
-#   return forward, backward
+def test_timereversal(pos_init, vel_init, massratio,
+                      cycles, res=10**3, id='test_timereversal'):
+    """
+    Verify time-reversal symmetry of orbit solutions.
+
+    A projectile with the given initial conditions will be evolved
+    forward for the given number of binary periods, and then evolved
+    backwards from the final point for an identical amount of time. 
+
+    Returns the forward and backward orbit objects: forward, backward.
+    """
+    forward_pos_init = np.asarray(pos_init)
+    forward_vel_init = np.asarray(vel_init)
+    massratio = float(massratio)
+    times = np.linspace(0, cycles*2*np.pi, cycles*res)
+    forward_bin_init = 0.0  # initial binary angle
+    forward_ccwise = True   # binary rotates counterclockwise
+    forward = gbin.Orbit(forward_pos_init, forward_vel_init,
+                         forward_bin_init, forward_ccwise,
+                         massratio, '{}-forward'.format(id))
+    forward.evolve(times)
+    backward_pos_init = forward.pos[-1, :]
+    backward_vel_init = forward.vel[-1, :]*(-1)
+    backward_bin_init = forward.binary_angle[-1]
+    backward_ccwise = False
+    backward = gbin.Orbit(backward_pos_init, backward_vel_init,
+                          backward_bin_init, backward_ccwise,
+                          massratio, '{}-backward'.format(id))
+    backward.evolve(times)
+    fig, ax = plt.subplots()
+    gbin.plot_orbit_inertial(forward,  ax, marker='o', linestyle='', 
+                             alpha=0.5, color='b', label='forward')
+    gbin.plot_orbit_inertial(backward, ax, marker='.', linestyle='', 
+                             alpha=0.8, color='r', label='backward')
+    plt.show()
+    return forward, backward
