@@ -10,19 +10,24 @@ import matplotlib.pyplot as plt
 import gravbin as gbin
 
 
+def test_orbit(pos_init, vel_init, massratio, cycles, id='test', res=10**4):
+    """
+    This is a quick visual check of orbits. 
 
-def test_orbit(pos_init, vel_init, bin_init, ccwise, cycles=3, res=100):
-  """
-  This is a quick sanity check on the appearance of orbits. A
-  projectile with the given initial state will be evolved for the
-  given number of binary cycles, and resulting trajectory plotted.
-  """
-  orbit = gbin.Orbit(pos_init, vel_init, bin_init, ccwise, 'test')
-  t = np.linspace(0, cycles, res*cycles)
-  orbit.evolve(t)
-  plot_trajectory(orbit)
-  plt.show()
-  return orbit
+    A projectile with the given initial state in the inertial frame will
+    be evolved for the passed number of binary orbital periods and plotted.
+    """
+    pos_init = np.asarray(pos_init)
+    vel_init = np.asarray(vel_init)
+    massratio = float(massratio)
+    bin_init = 0.0  # initial binary angle
+    ccwise = True   # binary rotates counterclockwise
+    orbit = gbin.Orbit(pos_init, vel_init, bin_init, ccwise, massratio, id)
+    times = np.linspace(0, cycles, res*cycles)
+    orbit.evolve(times)
+    gbin.plot_orbit_inertial(orbit)
+    plt.show()
+    return orbit
 
 
 def test_res(pos_init, vel_init, bin_init, ccwise,
