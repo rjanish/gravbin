@@ -23,7 +23,7 @@ def test_orbit(pos_init, vel_init, massratio, cycles, id='test', res=10**4):
     bin_init = 0.0  # initial binary angle
     ccwise = True   # binary rotates counterclockwise
     orbit = gbin.Orbit(pos_init, vel_init, bin_init, ccwise, massratio, id)
-    times = np.linspace(0, cycles, res*cycles)
+    times = np.linspace(0, cycles*np.pi*2, res*cycles)
     orbit.evolve(times)
     gbin.plot_orbit_inertial(orbit)
     plt.show()
