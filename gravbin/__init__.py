@@ -2,6 +2,6 @@
 Module for computing orbits in a restricted 3-body gravitational potential. 
 """
 
-from BinarySim import *
+from binarysim import *
 from plotting import *
 from animate import *
