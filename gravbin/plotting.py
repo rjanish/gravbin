@@ -2,6 +2,8 @@
 Functions for plotting orbits. 
 """
 
+import matplotlib.pyplot as plt
+
 
 def plot_orbits_inertial(binsim, ax=None, **kwargs):
     """

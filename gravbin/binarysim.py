@@ -39,7 +39,7 @@ class BinarySim(object):
         self.ecc = float(eccentricity)
         self.radius_1 = float(radius_1)
         self.radius_2 = float(radius_2)
-        self.label = string(label)
+        self.label = str(label)
         # initialize simulation
         self.space_dim = 3
         self.m1 = self.mr
@@ -47,7 +47,7 @@ class BinarySim(object):
         self.sim = rb.Simulation()
         self.sim.add(m=self.m1, r=self.radius_1)  
         self.sim.add(m=self.m2, r=self.radius_2, a=1.0, e=self.ecc)
-        sim.move_to_com()
+        self.sim.move_to_com()
 
     def add_test_particles(self, pos, vel):
         """
@@ -65,7 +65,7 @@ class BinarySim(object):
             self.sim.add(x=x, y=y, z=z, v_x=v_x, v_y=v_y, v_z=v_z)
             # no mass or radius specified -> m = 0, radius = 0
 
-    def follow(self, times):
+    def record(self, times):
         """
         Integrate the simulation from the current time to the passed
         times, recording the states of all particles at each time.
