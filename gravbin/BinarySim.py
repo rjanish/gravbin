@@ -8,7 +8,7 @@ import numpy as np
 import rebound as rb
 
 
-class Orbit(object):
+class BinarySim(object):
     """
     This is a convenience interface for a Rebound simulation and
     a container for its associated data. 
