@@ -65,11 +65,11 @@ class BinarySim(object):
             self.sim.add(x=x, y=y, z=z, vx=v_x, vy=v_y, vz=v_z)
             # no mass or radius specified -> m = 0, radius = 0
 
-    def record(self, times):
+    def run(self, times):
         """
         Integrate the simulation from the current time to the passed
         times, recording the states of all particles at each time.
-        Results are recorded in the track attribute.
+        Results are recorded in the paths attribute.
 
         Args:
         times - 1D ndarraylike 
@@ -80,7 +80,7 @@ class BinarySim(object):
         num_samples = self.times.size
         test_state_shape = (num_test_particles, self.space_dim, num_samples)
         binary_state_shape = (2, self.space_dim, num_samples)
-        self.track = {"binary":{"pos":np.full(binary_state_shape, np.nan), 
+        self.paths = {"binary":{"pos":np.full(binary_state_shape, np.nan), 
                                 "vel":np.full(binary_state_shape, np.nan)},
                         "test":{"pos":np.full(test_state_shape, np.nan), 
                                 "vel":np.full(test_state_shape, np.nan)}}
@@ -94,6 +94,6 @@ class BinarySim(object):
                       # above slice object is equivalent to a ':' index
                     pos = [particle.x, particle.y, particle.z]
                     vel = [particle.vx, particle.vy, particle.vz]
-                    self.track[subsystem]["pos"][index] = pos
-                    self.track[subsystem]["vel"][index] = vel
+                    self.paths[subsystem]["pos"][index] = pos
+                    self.paths[subsystem]["vel"][index] = vel
 
