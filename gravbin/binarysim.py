@@ -62,7 +62,7 @@ class BinarySim(object):
             of Cartesian velocities (v_x, v_y, v_z).
         """
         for (x, y, z), (v_x, v_y, v_z) in zip(pos, vel):
-            self.sim.add(x=x, y=y, z=z, v_x=v_x, v_y=v_y, v_z=v_z)
+            self.sim.add(x=x, y=y, z=z, vx=v_x, vy=v_y, vz=v_z)
             # no mass or radius specified -> m = 0, radius = 0
 
     def record(self, times):
