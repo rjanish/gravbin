@@ -22,8 +22,8 @@ class BinarySim(object):
     t=0, the more massive body is along the -x axis and the less 
     massive along the +x axis.  
     """
-    def __init__(self, mass_ratio=1, eccentricity=0, 
-                 radius_1=0, radius_2=0, label=None):
+    def __init__(self, mass_ratio=0.5, eccentricity=0.0, 
+                 radius_1=0.0, radius_2=0.0, label=None):
         """
         Set the initial state of the binary.
 
