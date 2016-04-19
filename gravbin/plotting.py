@@ -20,13 +20,15 @@ def plot_orbits_inertial(binsim, ax=None, **kwargs):
         fig, ax = plt.subplots()
     orbits = binsim.track
     times = binsim.times
-    ax.plot(times, orbits["test"]["pos"].T, **kwargs)
-    heavy_alpha = 0.9
-    light_alpha = heavy_alpha*(1.0/binsim.mr - 1.0)
-        # light_alpha/heavy_alpha = lighter_mass/heavier_mass 
-    ax.plot(times, orbits["binary"]["pos"][0, :],
-            linestyle='-', marker='', color='k', alpha=heavy_alpha)
-    ax.plot(times, orbits["binary"]["pos"][1, :],
-            linestyle='-', marker='', color='k', alpha=light_alpha)
+    test_x = orbits["test"]["pos"][:, 0].T  # (time, particle)
+    test_y = orbits["test"]["pos"][:, 1].T
+    ax.plot(test_x, test_y, **kwargs)
+    heavy_x = orbits["binary"]["pos"][0, 0].T
+    heavy_y = orbits["binary"]["pos"][0, 1].T
+    ax.plot(heavy_x, heavy_y, linestyle='', marker='.', color='k', alpha=0.8)
+    light_x = orbits["binary"]["pos"][1, 0].T
+    light_y = orbits["binary"]["pos"][1, 1].T 
+    ax.plot(light_x, light_y, linestyle='', marker='.', color='k', alpha=0.8)
     ax.plot(*[0, 0], color='k', marker='o', linestyle='', alpha=1.0)  # COM
+    ax.set_aspect("equal")
     return ax

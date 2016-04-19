@@ -75,7 +75,7 @@ class BinarySim(object):
         times - 1D ndarraylike 
             Times at which to record particles' state
         """
-        self.times = np.array(times, dytpe=float)
+        self.times = np.array(times, dtype=float)
         num_test_particles = self.sim.N - 2
         num_samples = self.times.size
         test_state_shape = (num_test_particles, self.space_dim, num_samples)
@@ -85,9 +85,9 @@ class BinarySim(object):
                         "test":{"pos":np.full(test_state_shape, np.nan), 
                                 "vel":np.full(test_state_shape, np.nan)}}
         for time_index, t in enumerate(self.times):
-            sim.integrate(t) # advance simulation to time t
-            particles = {"binary":sim.particles[:2], 
-                           "test":sim.particles[2:]}
+            self.sim.integrate(t) # advance simulation to time t
+            particles = {"binary":self.sim.particles[:2], 
+                           "test":self.sim.particles[2:]}
             for subsystem, particle_list in particles.iteritems():
                 for particle_index, particle in enumerate(particle_list):
                     index = [particle_index, slice(None, None, 1), time_index]
