@@ -31,4 +31,6 @@ def plot_orbits_inertial(binsim, ax=None, **kwargs):
     ax.plot(light_x, light_y, linestyle='-', marker='', color='k', alpha=0.8)
     ax.plot(*[0, 0], color='k', marker='o', linestyle='', alpha=1.0)  # COM
     ax.set_aspect("equal")
+    ax.set_xlim(-2.5, 2.5)
+    ax.set_ylim(-2.5, 2.5)
     return ax
