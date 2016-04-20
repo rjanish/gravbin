@@ -8,16 +8,6 @@ import numpy as np
 import rebound as rb
 
 
-class Escape(Exception):
-    """ A test particle has reached the simulation boundary """
-    pass
-
-
-class Collision(Exception):
-    """ A test particle has collided with one of the binary stars """
-    pass
-
-
 class BinarySim(object):
     """
     This is a convenience interface for a Rebound simulation and
@@ -33,7 +23,7 @@ class BinarySim(object):
     massive along the +x axis.  
     """
     def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius_1=0.0,
-                 radius_2=0.0, boundary=100.0, label=None):
+                 radius_2=0.0, boundary_size=100.0, label=None):
         """
         Set the initial state of the binary.
 
@@ -56,14 +46,16 @@ class BinarySim(object):
         self.ecc = float(eccentricity)
         self.radius_1 = float(radius_1)
         self.radius_2 = float(radius_2)
-        self.boundary = float(boundary)
+        self.boundary_size = float(boundary_size)
         self.label = str(label)
         # initialize simulation
         self.space_dim = 3
+        self.collision = "direct"
+        self.boundary = "open"
         self.m1 = self.mr
         self.m2 = 1 - self.mr
         self.sim = rb.Simulation()
-        self.sim.exit_max_distance = boundary
+        self.sim.exit_max_distance = boundary_size
         self.sim.add(m=self.m1, r=self.radius_1)  
         self.sim.add(m=self.m2, r=self.radius_2, a=1.0, e=self.ecc)
         self.sim.move_to_com()
@@ -80,7 +72,7 @@ class BinarySim(object):
             The velocities of each particle to add, as a sequence
             of Cartesian velocities (v_x, v_y, v_z).
         """
-        self.starting = np.hstack(pos, vel)
+        self.starting = np.hstack((pos, vel))
         for n, [(x, y, z), (v_x, v_y, v_z)] in enumerate(zip(pos, vel)):
             self.sim.add(x=x, y=y, z=z, vx=v_x, vy=v_y, vz=v_z,
                          id=(2 + n))  # binary stars have id 0 and 1
@@ -107,12 +99,7 @@ class BinarySim(object):
                         "test":{"pos":np.full(test_state_shape, np.nan), 
                                 "vel":np.full(test_state_shape, np.nan)}}
         for time_index, t in enumerate(self.times):
-            try:
-                self.sim.integrate(t) # advance simulation to time t
-            except Escape:
-                self.handle_escape()
-            except Collision:
-                self.handle_collision()
+            self.sim.integrate(t) # advance simulation to time t
             particles = {"binary":self.sim.particles[:2], 
                            "test":self.sim.particles[2:]}
             for subsystem, particle_list in particles.iteritems():
@@ -124,34 +111,34 @@ class BinarySim(object):
                     self.paths[subsystem]["pos"][index] = pos
                     self.paths[subsystem]["vel"][index] = vel
 
-    def handle_collision(self):
-        pass
+    # def handle_collision(self):
+    #     pass
 
-    def handle_escape(self):
-        pass
+    # def handle_escape(self):
+    #     pass
 
-    def get_particle_data(self):
-        """ Get an ndarray of particle spacial coordinates """
-        ids = np.full(self.sim.N)
-        coords = np.full((self.sim.N, 3))
-        for n, p in enumerate(self.sim.particles):
-            ids[n] = p.id
-            coords[n, :] = [p.x, p.y, p.z]
-        return ids, coords
+    # def get_particle_data(self):
+    #     """ Get an ndarray of particle spacial coordinates """
+    #     ids = np.full(self.sim.N)
+    #     coords = np.full((self.sim.N, 3))
+    #     for n, p in enumerate(self.sim.particles):
+    #         ids[n] = p.id
+    #         coords[n, :] = [p.x, p.y, p.z]
+    #     return ids, coords
 
-    def check_events(self):
-        ids, coords = self.get_particle_coords()
-        bin1_coords = coords[0]
-        bin2_coords = coords[1]
-        test_coords = coords[2:]
-        test_ids = ids[2:]
-        # check for escape
-        test_dist = np.sqrt(np.sum(test_coords**2, axis=1))
-        outside = test_ids[test_dist > self.boundary]
-        # check for binary - test particle collision
-        dist_to_1 = np.sqrt(np.sum((test_coords - bin1_coords)**2, axis=1))
-        collide_1 = dist_to_1 < self.sim.particles[0].radius
-        dist_to_2 = np.sqrt(np.sum((test_coords - bin2_coords)**2, axis=1))
-        collide_2 = dist_to_2 < self.sim.particles[1].radius
-        colliding = test_ids[collide_1 + collide_2]  # element-wise logical or
+    # def check_events(self):
+    #     ids, coords = self.get_particle_coords()
+    #     bin1_coords = coords[0]
+    #     bin2_coords = coords[1]
+    #     test_coords = coords[2:]
+    #     test_ids = ids[2:]
+    #     # check for escape
+    #     test_dist = np.sqrt(np.sum(test_coords**2, axis=1))
+    #     outside = test_ids[test_dist > self.boundary_size]
+    #     # check for binary - test particle collision
+    #     dist_to_1 = np.sqrt(np.sum((test_coords - bin1_coords)**2, axis=1))
+    #     collide_1 = dist_to_1 < self.sim.particles[0].radius
+    #     dist_to_2 = np.sqrt(np.sum((test_coords - bin2_coords)**2, axis=1))
+    #     collide_2 = dist_to_2 < self.sim.particles[1].radius
+    #     colliding = test_ids[collide_1 + collide_2]  # element-wise logical or
 
