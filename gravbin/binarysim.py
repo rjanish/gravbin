@@ -55,13 +55,13 @@ class BinarySim(object):
         self.m1 = self.mr
         self.m2 = 1 - self.mr
         self.sim = rb.Simulation()
-        # self.sim.collision = "direct"
         self.sim.add(m=self.m1, r=self.radius_1, id=-1)  
         self.sim.add(m=self.m2, r=self.radius_2, id=-2, a=1.0, e=self.ecc)
             # id must be an integer, so binary ids of -1, -2 allows test
             # particle ids to be 0, 1, 2, etc, which simplifies indexing 
         self.sim.move_to_com()
         self.sim.exit_max_distance = self.boundary_size
+        self.sim.collision = "direct"
 
     def add_test_particles(self, pos, vel):
         """
