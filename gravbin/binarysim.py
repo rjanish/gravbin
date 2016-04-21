@@ -4,6 +4,8 @@ particles about a binary using the Rebound package.
 """
 
 
+import warnings
+
 import numpy as np
 import rebound as rb
 
@@ -134,21 +136,53 @@ class BinarySim(object):
                     self.paths[subsystem]["pos"][index] = pos
                     self.paths[subsystem]["vel"][index] = vel
 
-    def get_particle_data(self):
-        """ Get an ndarray of rebound simulation particle ids, coords, etc """
+    def get_all_particle_data(self):
+        """ Get array of simulation particles' ids, coords, and velocities """
         ids = np.zeros(self.sim.N, dtype=int)
         coords = np.full((self.sim.N, 3), np.nan)
-        for n, p in enumerate(self.sim.particles):
-            ids[n] = p.id
-            coords[n, :] = [p.x, p.y, p.z]
-        return ids, coords
+        vels = np.full((self.sim.N, 3), np.nan)
+        for index, particle in enumerate(self.sim.particles):
+            ids[index] = particle.id
+            coords[index, :] = [particle.x, particle.y, particle.z]
+            vels[index, :] = [particle.vx, particle.vy, particle.vz]
+        return ids, coords, vels
+
+    def get_binary_data(self):
+        """ 
+        Returns array of binary members' ids, coords, and velocities.
+
+        This is an idiot-proofing wrapper for get_all_particle_data,
+        to prevent confusion of binary members and test particles.
+        """
+        ids, coords, vels = self.get_all_particle_data()
+        return ids[:2], coords[:2], vels[:2]
+
+    def get_test_particle_data(self):
+        """ 
+        Returns array of test particles' ids, coords, and velocities.
+
+        This is an idiot-proofing wrapper for get_all_particle_data,
+        to prevent confusion of binary members and test particles.
+        """
+        ids, coords, vels = self.get_all_particle_data()
+        return ids[2:], coords[2:], vels[2:]
 
     def process_escape(self):
         """ Rebound has detected an escaped particle - remove it from sim """
-        ids, coords = self.get_particle_data()
-        test_coords = coords[2:]
-        test_ids = ids[2:]
-        test_dist = np.sqrt(np.sum(test_coords**2, axis=1))
-        escaped = test_ids[test_dist > self.boundary_size]
+        ids, coords, vels = self.get_test_particle_data()
+        dist = np.sqrt(np.sum(coords**2, axis=-1))
+        outside = dist >= self.boundary_size
+        energy =  (0.5*np.sum(vels[outside]**2, axis=-1) - 1.0/dist[outside])
+        unbound = energy >= 0.0
+        escaped = ids[outside][unbound]
+        returning = ids[outside][~unbound]
         for particle_id in escaped:
+            print "removing", particle_id
             self.sim.remove(id=particle_id)
+        for particle_id in returning:
+            msg = ("time {}: particle {} exited the simulation "
+                   "on a *bound* orbit".format(self.sim.t, particle_id))
+            warnings.warn(msg, RuntimeWarning)
+            print "removing", particle_id
+            self.sim.remove(id=particle_id)
+
