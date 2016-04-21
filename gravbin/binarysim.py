@@ -54,6 +54,7 @@ class BinarySim(object):
         self.space_dim = 3
         self.m1 = self.mr
         self.m2 = 1 - self.mr
+        self.binary_radii = [self.radius_1, self.radius_2]
         self.sim = rb.Simulation()
         self.sim.add(m=self.m1, r=self.radius_1, id=-1)  
         self.sim.add(m=self.m2, r=self.radius_2, id=-2, a=1.0, e=self.ecc)
@@ -61,7 +62,9 @@ class BinarySim(object):
             # particle ids to be 0, 1, 2, etc, which simplifies indexing 
         self.sim.move_to_com()
         self.sim.exit_max_distance = self.boundary_size
-        self.sim.collision = "direct"
+        # self.sim.collision = "direct"
+        # self.sim.collision_resolve = self.process_collision
+        self.sim.heartbeat = self.check_for_collision
 
     def add_test_particles(self, pos, vel):
         """
@@ -174,15 +177,25 @@ class BinarySim(object):
         outside = dist >= self.boundary_size
         energy =  (0.5*np.sum(vels[outside]**2, axis=-1) - 1.0/dist[outside])
         unbound = energy >= 0.0
-        escaped = ids[outside][unbound]
-        returning = ids[outside][~unbound]
-        for particle_id in escaped:
-            print "removing", particle_id
+        for particle_id, escaping in zip(ids[outside], unbound):
+            if not escaping:
+                msg = ("time {}: particle {} exited the simulation "
+                       "on a *bound* orbit".format(self.sim.t, particle_id))
+                warnings.warn(msg, RuntimeWarning)
+            print "t={}: removing {} - escape".format(self.sim.t, particle_id)
             self.sim.remove(id=particle_id)
-        for particle_id in returning:
-            msg = ("time {}: particle {} exited the simulation "
-                   "on a *bound* orbit".format(self.sim.t, particle_id))
-            warnings.warn(msg, RuntimeWarning)
-            print "removing", particle_id
-            self.sim.remove(id=particle_id)
+
+    def check_for_collision(self, internal_sim_object):
+        test_ids, test_coords, test_vels = self.get_test_particle_data()
+        binary_ids, binary_coords, binary_vels = self.get_binary_data()
+        for binary, binary_pos in enumerate(binary_coords):
+            dists_sq = np.sum((test_coords - binary_pos)**2, axis=-1)
+            colliding = dists_sq < self.binary_radii[binary]**2
+            num_collisions = np.sum(colliding)
+            if num_collisions > 0:
+                for particle_id in test_ids[colliding]:
+                    print ("t={}: removing {} - collision with binary {}"
+                           "".format(self.sim.t, particle_id, binary))
+                    self.sim.remove(id=particle_id)
+
 
