@@ -12,8 +12,8 @@ import rebound as rb
 
 class BinarySim(object):
     """
-    This is a convenience interface for a Rebound simulation and
-    a container for its associated data. 
+    This is a convenience interface for a Rebound simulation, 
+    specialized for simulating a binary + N test particles.
 
     Units: G = 1, binary total mass = 1, binary reduced semi-major axis
     = 1 (if circular, this is half the binary separation). The binary
@@ -22,7 +22,8 @@ class BinarySim(object):
     Coordinates: Cartesian coordinates are used, with the origin at the
     binary COM and the binary's angular momentum along the z-axis. At 
     t=0, the more massive body is along the -x axis and the less 
-    massive along the +x axis.  
+    massive along the +x axis (in the star-planet limit, the planet 
+    is initially at x \approx 1 and the start x \approx 0).  
     """
     def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius_1=0.0,
                  radius_2=0.0, boundary_size=100.0, label=None):
@@ -82,13 +83,13 @@ class BinarySim(object):
         for n, [(x, y, z), (vx, vy, vz)] in enumerate(zip(pos, vel)):
             self.sim.add(x=x, y=y, z=z, vx=vx, vy=vy, vz=vz, id=n)
                 # binary stars have id -1 and -2
-                # no mass nor radius specified -> m = 0, radius = 0
+                # no mass nor radius specified -> mass = 0, radius = 0
 
     def run(self, times):
         """
         Integrate the simulation from the current time to the passed
-        times, recording the states of all particles at each time.
-        Results are recorded in the paths attribute.
+        times, recording the states of all particles at each passed
+        time. Results are recorded in the paths attribute.
 
         Args:
         times - 1D ndarraylike 
@@ -122,6 +123,7 @@ class BinarySim(object):
                 self.sim.integrate(t) # advance simulation to time t
             except rb.Escape:
                 self.process_escape()
+            # record simulation state
             particles = {"binary":self.sim.particles[:2], 
                            "test":self.sim.particles[2:]}
             for subsystem, particle_list in particles.iteritems():
