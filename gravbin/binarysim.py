@@ -114,8 +114,9 @@ class BinarySim(object):
                                 "vel":np.full(binary_state_shape, np.nan)},
                         "test":{"pos":np.full(test_state_shape, np.nan), 
                                 "vel":np.full(test_state_shape, np.nan)}}
-        self.escapes = []
-        self.collisions = []
+        self.escapes = {"time":[], "id":[], "pos":[], "vel":[]}
+        self.collisions = {"time":[], "id":[], "binary":[],
+                           "pos":[], "vel":[]}
         for time_index, t in enumerate(self.times):
             try:
                 self.sim.integrate(t) # advance simulation to time t
@@ -182,12 +183,13 @@ class BinarySim(object):
             if not unbound[index]:
                 msg = ("time {}: particle {} exited the simulation "
                        "on a *bound* orbit".format(self.sim.t, particle_id))
-                warnings.warn(msg, RuntimeWarning)
-            escape_record = {"time":self.sim.t,
-                             "id":particle_id,
-                             "pos":coords[outside][index],
-                             "vel":vels[outside][index]}
-            self.escapes.append(escape_record)
+                # warnings.warn(msg, RuntimeWarning)
+                raise Exception(msg)
+                continue
+            self.escapes["time"].append(self.sim.t)
+            self.escapes["id"].append(particle_id)
+            self.escapes["pos"].append(coords[outside][index])
+            self.escapes["vel"].append(vels[outside][index])
             print "t={}: removing {} - escape".format(self.sim.t, particle_id)
             self.sim.remove(id=particle_id)
 
@@ -203,12 +205,11 @@ class BinarySim(object):
             num_collisions = np.sum(colliding)
             if num_collisions > 0:
                 for index, particle_id in enumerate(test_ids[colliding]):
-                    collision_record = {"time":self.sim.t,
-                                        "id":particle_id,
-                                        "binary":binary,
-                                        "pos":test_coords[colliding][index],
-                                        "vel":test_vels[colliding][index]}
-                    self.collisions.append(collision_record)
+                    self.collisions["time"].append(self.sim.t)
+                    self.collisions["id"].append(particle_id)
+                    self.collisions["binary"].append(binary)
+                    self.collisions["pos"].append(test_coords[colliding][index])
+                    self.collisions["vel"].append(test_vels[colliding][index])
                     print ("t={}: removing {} - collision with binary {}"
                            "".format(self.sim.t, particle_id, binary))
                     self.sim.remove(id=particle_id)
