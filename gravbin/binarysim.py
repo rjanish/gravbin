@@ -152,6 +152,12 @@ class BinarySim(object):
             vels[index, :] = [particle.vx, particle.vy, particle.vz]
         return ids, coords, vels
 
+    # def get_all_particle_data(self):
+    #     """ Get array of simulation particles' ids, coords, and velocities """
+    #     ctypes_output = self.sim.get_particle_data()
+    #     ids, mass, radii, coords, vels = map(np.asarray, ctypes_output)
+    #     return ids, coords, vels
+
     def get_binary_data(self):
         """ 
         Returns array of binary members' ids, coords, and velocities.
@@ -185,9 +191,7 @@ class BinarySim(object):
             if not unbound[index]:
                 msg = ("time {}: particle {} exited the simulation "
                        "on a *bound* orbit".format(self.sim.t, particle_id))
-                # warnings.warn(msg, RuntimeWarning)
-                raise Exception(msg)
-                continue
+                warnings.warn(msg, RuntimeWarning)
             self.escapes["time"].append(self.sim.t)
             self.escapes["id"].append(particle_id)
             self.escapes["pos"].append(coords[outside][index])
