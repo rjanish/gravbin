@@ -56,10 +56,10 @@ class BinarySim(object):
         self.m2 = 1 - self.mr
         self.binary_radii = [self.radius_1, self.radius_2]
         self.sim = rb.Simulation()
-        self.sim.add(m=self.m1, r=self.radius_1, id=-1)  
-        self.sim.add(m=self.m2, r=self.radius_2, id=-2, a=1.0, e=self.ecc)
-            # id must be an integer, so binary ids of -1, -2 allows test
-            # particle ids to be 0, 1, 2, etc, which simplifies indexing 
+        self.sim.add(m=self.m1, r=self.radius_1, hash=0)  
+        self.sim.add(m=self.m2, r=self.radius_2, hash=1, a=1.0, e=self.ecc)
+            # id must be an unsigned-integer, so binary will carry ids
+            # of 0, 1, with test particles ids 2, 3, 4, ... 
         self.sim.move_to_com()
         self.sim.exit_max_distance = self.boundary_size
         self.sim.heartbeat = self.check_for_collision  # called every timestep
@@ -81,8 +81,8 @@ class BinarySim(object):
         """
         self.test_starting = np.hstack((pos, vel))
         for n, [(x, y, z), (vx, vy, vz)] in enumerate(zip(pos, vel)):
-            self.sim.add(x=x, y=y, z=z, vx=vx, vy=vy, vz=vz, id=n)
-                # binary stars have id -1 and -2
+            self.sim.add(x=x, y=y, z=z, vx=vx, vy=vy, vz=vz, hash=2+n)
+                # binary stars use id 0, 1; test particles 2, 3, ...
                 # no mass nor radius specified -> mass = 0, radius = 0
 
     def run(self, times):
@@ -129,11 +129,11 @@ class BinarySim(object):
             for subsystem, particle_list in particles.iteritems():
                 for particle in particle_list:
                     if subsystem == "binary":
-                        particle_index = np.absolute(particle.id) - 1
-                            # binary ids are -1 and -2, map these to 0, 1
+                        particle_index = particle.hash
+                            # binary particle ids are 0, 1
                     elif subsystem == "test":
-                        particle_index = particle.id
-                            # test particle ids are 0, 1, 2, ...
+                        particle_index = particle.hash - 2
+                            # test particle ids are 2, 3, 4 ...
                     index = [particle_index, slice(None, None, 1), time_index]
                       # above slice object is equivalent to a ':' index
                     pos = [particle.x, particle.y, particle.z]
@@ -141,22 +141,23 @@ class BinarySim(object):
                     self.paths[subsystem]["pos"][index] = pos
                     self.paths[subsystem]["vel"][index] = vel
 
-    def get_all_particle_data(self):
-        """ Get array of simulation particles' ids, coords, and velocities """
-        ids = np.zeros(self.sim.N, dtype=int)
-        coords = np.full((self.sim.N, 3), np.nan)
-        vels = np.full((self.sim.N, 3), np.nan)
-        for index, particle in enumerate(self.sim.particles):
-            ids[index] = particle.id
-            coords[index, :] = [particle.x, particle.y, particle.z]
-            vels[index, :] = [particle.vx, particle.vy, particle.vz]
-        return ids, coords, vels
-
     # def get_all_particle_data(self):
     #     """ Get array of simulation particles' ids, coords, and velocities """
-    #     ctypes_output = self.sim.get_particle_data()
-    #     ids, mass, radii, coords, vels = map(np.asarray, ctypes_output)
+    #     ids = np.zeros(self.sim.N, dtype=int)
+    #     coords = np.full((self.sim.N, 3), np.nan)
+    #     vels = np.full((self.sim.N, 3), np.nan)
+    #     for index, particle in enumerate(self.sim.particles):
+    #         ids[index] = particle.id
+    #         coords[index, :] = [particle.x, particle.y, particle.z]
+    #         vels[index, :] = [particle.vx, particle.vy, particle.vz]
     #     return ids, coords, vels
+
+    def get_all_particle_data(self):
+        """ Get array of simulation particles' ids, coords, and velocities """
+        ctypes_output = self.sim.get_particle_data()
+        ids, mass, radii, coords, vels = map(np.asarray, ctypes_output)
+
+        return ids, coords, vels
 
     def get_binary_data(self):
         """ 
@@ -197,7 +198,9 @@ class BinarySim(object):
             self.escapes["pos"].append(coords[outside][index])
             self.escapes["vel"].append(vels[outside][index])
             print "t={}: removing {} - escape".format(self.sim.t, particle_id)
-            self.sim.remove(id=particle_id)
+            self.sim.remove(hash=int(particle_id))
+                # selecting from numpy int array does not return python int,
+                # but rather numpy.int32, which fails rebound's type checks 
 
     def check_for_collision(self, internal_sim_object):
         """
@@ -218,6 +221,6 @@ class BinarySim(object):
                     self.collisions["vel"].append(test_vels[colliding][index])
                     print ("t={}: removing {} - collision with binary {}"
                            "".format(self.sim.t, particle_id, binary))
-                    self.sim.remove(id=particle_id)
+                    self.sim.remove(hash=int(particle_id)) # see process_escape
 
 
