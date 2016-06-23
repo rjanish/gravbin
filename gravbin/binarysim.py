@@ -203,24 +203,29 @@ class BinarySim(object):
         """ 
         Rebound has detected an escaped particle - remove it from simulation
         """
-        hashes, coords, vels = self.get_test_particle_data()
-        dist = np.sqrt(np.sum(coords**2, axis=-1))
+        test_coords = self.get_all_coords("test")
+        dist = np.sqrt(np.sum(test_coords**2, axis=-1))
         outside = dist >= self.boundary_size
-        energy =  (0.5*np.sum(vels[outside]**2, axis=-1) - 1.0/dist[outside])
-        unbound = energy >= 0.0
-        for index, particle_id in enumerate(hashes[outside]):
-            if not unbound[index]:
+        test_hashes = self.get_active_test_hashes()
+        for index, test_hash in enumerate(test_hashes[outside]):
+            print test_hash
+            test_particle = self.sim.get_particle_by_hash(int(test_hash))
+            pos, vel = reboundparticle_to_array(test_particle)
+            energy =  (0.5*np.sum(vel**2, axis=-1) - 1.0/dist[outside][index])
+            bound = energy < 0.0
+            if bound:
                 msg = ("time {}: particle {} exited the simulation "
-                       "on a *bound* orbit".format(self.sim.t, particle_id))
+                       "on a *bound* orbit".format(self.sim.t, test_hash))
                 warnings.warn(msg, RuntimeWarning)
-            self.escps["time"].append(self.sim.t)
-            self.escps["hash"].append(particle_id)
-            self.escps["pos"].append(coords[outside][index])
-            self.escps["vel"].append(vels[outside][index])
-            print "t={}: removing {} - escape".format(self.sim.t, particle_id)
-            self.sim.remove(hash=int(particle_id))
+            self.escps["time"][self.escp_cntr] = self.sim.t
+            self.escps["hash"][self.escp_cntr] = test_hash
+            self.escps["pos"][self.escp_cntr] = pos
+            self.escps["vel"][self.escp_cntr] = vel
+            print "t={}: removing {} - escape".format(self.sim.t, test_hash)
+            self.sim.remove(hash=int(test_hash))
                 # selecting from numpy int array does not return python int,
                 # but rather numpy.int32, which fails rebound's type checks 
+            self.escp_cntr += 1
 
     def check_for_collision(self):
         """
@@ -246,9 +251,7 @@ class BinarySim(object):
         colliding1[to_check] = dist1_sq < self.radius_1**2
         # process collisions
         if np.any(colliding0 | colliding1) > 0:
-            hashes = np.zeros(self.sim.N, dtype="uint32")
-            self.sim.serialize_particle_data(hash=hashes)
-            test_hashes = hashes[2:]
+            test_hashes = self.get_active_test_hashes()
             for bin_hash, colliding in zip([0, 1], [colliding0, colliding1]):
                 bin_pos = binary_coords[bin_hash]
                 for index, test_hash in enumerate(test_hashes[colliding]):
@@ -264,6 +267,13 @@ class BinarySim(object):
                            "".format(self.sim.t, test_hash, bin_hash))
                     self.sim.remove(hash=int(test_hash)) # see process_escape
                     self.coll_cntr += 1
+
+    def get_active_test_hashes(self):
+        """ """
+        hashes = np.zeros(self.sim.N, dtype="uint32")
+        self.sim.serialize_particle_data(hash=hashes)
+        test_hashes = hashes[2:]
+        return test_hashes
 
 
 def reboundparticle_to_array(p):
