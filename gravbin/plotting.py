@@ -20,14 +20,14 @@ def plot_orbits_inertial(binsim, ax=None, **kwargs):
         fig, ax = plt.subplots()
     paths = binsim.paths
     times = binsim.times
-    test_x = paths["test"]["pos"][:, 0].T  # (time, particle)
-    test_y = paths["test"]["pos"][:, 1].T
+    test_x = paths["pos"][2:, 0].T  # (time, particle)
+    test_y = paths["pos"][2:, 1].T
     ax.plot(test_x, test_y, **kwargs)
-    heavy_x = paths["binary"]["pos"][0, 0].T
-    heavy_y = paths["binary"]["pos"][0, 1].T
+    heavy_x = paths["pos"][0, 0].T
+    heavy_y = paths["pos"][0, 1].T
     ax.plot(heavy_x, heavy_y, linestyle='-', marker='', color='k', alpha=0.8)
-    light_x = paths["binary"]["pos"][1, 0].T
-    light_y = paths["binary"]["pos"][1, 1].T 
+    light_x = paths["pos"][1, 0].T
+    light_y = paths["pos"][1, 1].T 
     ax.plot(light_x, light_y, linestyle='-', marker='', color='k', alpha=0.8)
     ax.plot(*[0, 0], color='k', marker='o', linestyle='', alpha=1.0)  # COM
     ax.set_aspect("equal")
