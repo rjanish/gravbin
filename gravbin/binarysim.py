@@ -61,8 +61,7 @@ class BinarySim(object):
         self.space_dim = 3
         self.m1 = self.mr
         self.m2 = 1 - self.mr
-        self.test_starting = None  # the starting states of test particles
-        self.num_test_particles = 0
+        self.N_test_start = 0  # starting number of test particles
         self.sim = rb.Simulation()
         self.sim.exit_max_distance = self.boundary_size
         self.sim.heartbeat = self.heartbeat  # called every timestep
@@ -89,14 +88,16 @@ class BinarySim(object):
             The velocities of each particle to add, as a sequence
             of Cartesian velocities (vx, vy, vz).
         """
-        if self.sim.N > 2:
-            raise RuntimeError("test particles' initial "
-                               "conditions are already specified")
-        for n, [(x, y, z), (vx, vy, vz)] in enumerate(zip(pos, vel)):
-            self.sim.add(x=x, y=y, z=z, vx=vx, vy=vy, vz=vz, hash=2+n)
-                # binary stars use hash 0, 1; test particles 2, 3, ...
-                # mass defaults to 0 (test particle)
-                # radius defaults to 0
+        if self.sim.t > 0:
+            raise RuntimeError("can only add test particles at time t=0; "
+                               "simulation time is t={}".format(self.sim.t))
+        starting_hash = 2 + self.N_test_start
+            # binary stars use hash 0, 1; test particles 2, 3, 4, ...
+        for index, [(x, y, z), (vx, vy, vz)] in enumerate(zip(pos, vel)):
+            self.sim.add(x=x, y=y, z=z, vx=vx, vy=vy, vz=vz,
+                         hash=starting_hash + index)
+                # mass defaults to 0 (test particle); radius defaults to 0
+        self.N_test_start = self.sim.N - 2
 
     def allocate_simulation_trackers(self):
         """ 
@@ -107,22 +108,25 @@ class BinarySim(object):
         likely contain empty slots after the simulation ends. The
         'empty' initializing value is np.nan for float and -1 for int.
         """
-        N_test = self.sim.N - 2
-        self.colls = {"time":np.full(N_test, np.nan),
-                      "bin_pos":np.full((N_test, 3), np.nan), 
-                      "bin_hash":np.full(N_test, -1, dtype=int),
-                      "test_pos":np.full((N_test, 3), np.nan), 
-                      "test_hash":np.full(N_test, -1, dtype=int)}
-        self.coll_cntr = 0
-        self.escps = {"time":np.full(N_test, np.nan), 
-                      "hash":np.full(N_test, -1, dtype=int), 
-                      "pos":np.full((N_test, 3), np.nan), 
-                      "vel":np.full((N_test, 3), np.nan)}
+        test_state_shape = (self.N_test_start, self.space_dim)
+        float_fill, int_fill = np.nan, -1
+        self.colls = {"time":np.full(self.N_test_start, float_fill),
+                      "bin_pos":np.full((test_state_shape), float_fill), 
+                      "bin_hash":np.full(self.N_test_start,
+                                         int_fill, dtype=int),
+                      "test_pos":np.full((test_state_shape), float_fill), 
+                      "test_hash":np.full(self.N_test_start,
+                                          int_fill, dtype=int)}
+        self.coll_cntr = 0 
+        self.escps = {"time":np.full(self.N_test_start, float_fill), 
+                      "hash":np.full(self.N_test_start, int_fill, dtype=int), 
+                      "pos":np.full((test_state_shape), float_fill), 
+                      "vel":np.full((test_state_shape), float_fill)}
         self.escp_cntr = 0
-        sim_state_shape = (self.sim.N, self.space_dim, self.times.size)
-        self.paths = {"pos":np.full(sim_state_shape, np.nan, dtype="float64"), 
-                      "vel":np.full(sim_state_shape, np.nan, dtype="float64")}
-        self.cur_pos = np.full((self.sim.N, 3), np.nan)
+        path_shape = (self.sim.N, self.space_dim, self.times.size)
+        self.paths = {"pos":np.full(path_shape, float_fill, dtype="float64"), 
+                      "vel":np.full(path_shape, float_fill, dtype="float64")}
+        self.cur_pos = np.full((self.sim.N, self.space_dim), float_fill)
 
     def run(self, times):
         """
