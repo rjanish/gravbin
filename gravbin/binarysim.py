@@ -21,11 +21,12 @@ class BinarySim(object):
     and physical separation depends on the eccentricity, see
     'rebound-conventions.ipynb' for details.
 
-    Coordinates: Cartesian coordinates are used, with the origin at the
-    binary COM and the binary's angular momentum along the z-axis. At 
-    t=0, the more massive body is along the -x axis and the less 
-    massive along the +x axis (in the star-planet limit, the planet 
-    is initially at x \approx 1 and the sun at x \approx 0).  
+    Coordinates: The origin of time is taken with the binary at its
+    closest approach at t=0. Cartesian spacial coordinates are used,
+    with the origin at the binary COM. The binary orbit is oriented to
+    have its angular momentum along the +z-axis and to have the more
+    massive body along the -x axis (and the less massive along +x)
+    during closest approach (t=0). 
     """
     def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius_0=0.0,
                  radius_1=0.0, boundary_size=100.0, label=None):
@@ -50,7 +51,8 @@ class BinarySim(object):
         self.mr = float(mass_ratio)
         self.ecc = float(eccentricity)
         self.period = 2*np.pi*(1.0 + self.ecc)**(-1.5)
-        self.bin_max_sep = 1 + self.ecc
+        self.bin_sep_max = 1 + self.ecc
+        self.bin_sep_min = 1 - self.ecc
         self.radius_0 = float(radius_0)
         self.radius_1 = float(radius_1)
         self.boundary_size = float(boundary_size)
