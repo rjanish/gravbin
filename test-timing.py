@@ -1,0 +1,66 @@
+""" 
+Test basic functionality gravbin rebound wrapper - adding particles,
+running simulation, detecting and recording collision and escape 
+events, and plotting. 
+
+Particles are randomly added on two spheres concentric with each binary
+member, each with a velocity radial from its respective binary. Half 
+of these particles start moving inward (test collision) and the other
+half outward (test escape).
+"""
+
+
+import warnings
+warnings.simplefilter("always", RuntimeWarning)
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as ptch
+
+import gravbin as gb
+
+
+bin_radius = 0.1
+test_start_distance = 0.15
+test_start_speed_out = 1.5
+test_start_speed_in = -0.3
+num_tests = 10 # per direction, per binary
+mass_ratio = 0.6
+ecc = 0.2
+test_per_binary = int(num_tests*2)
+
+T = 2*np.pi
+orbits = 10
+samples_per_orbit = 500
+times = np.linspace(0, orbits*T, orbits*samples_per_orbit)
+
+test_sim = gb.BinarySim(mass_ratio=mass_ratio, radius_0=bin_radius, 
+                        radius_1=bin_radius, eccentricity=ecc)
+bin0_start = np.array([(mass_ratio - 1)*test_sim.bin_sep_min, 0, 0])
+bin1_start = np.array([mass_ratio*test_sim.bin_sep_min, 0, 0])
+for binary_start in [bin0_start, bin1_start]:
+    for start_vel in [test_start_speed_in, test_start_speed_out]:
+        random_vects = np.random.random((num_tests, 3)) - 0.5
+        random_dirs = (random_vects.T/np.sum(random_vects**2, axis=1)).T
+        pos = binary_start + test_start_distance*random_dirs
+        vel = start_vel*random_dirs
+        test_sim.add_test_particles(pos, vel)
+test_sim.run(times)
+
+fig, ax = plt.subplots()
+gb.plot_orbits_inertial(test_sim, ax, alpha=0.6)
+ax.add_patch(ptch.Circle(bin0_start[:2], bin_radius, alpha=0.4,
+                     facecolor='none', linestyle='--'))
+ax.add_patch(ptch.Circle(bin1_start[:2], bin_radius, alpha=0.4,
+                     facecolor='none', linestyle='--'))
+ax.add_patch(ptch.Circle([0, 0], 100, alpha=0.6,
+                     facecolor='none', linestyle='--'))
+ax.plot(*test_sim.paths["pos"][2:, :2, 0].T, marker='.',
+        linestyle='', color='k', alpha=0.6) # orbit starting points
+collision_points = np.asarray(test_sim.colls["test_pos"])
+ax.plot(*collision_points[:, :2].T, color='r',
+        marker='.', linestyle='', alpha=0.6)
+escape_points = np.asarray(test_sim.escps["pos"])
+ax.plot(*escape_points[:, :2].T, color='r',
+        marker='.', linestyle='', alpha=0.6)
+plt.show()
