@@ -210,7 +210,6 @@ class BinarySim(object):
         outside = dist >= self.boundary_size
         test_hashes = self.get_active_test_hashes()
         for index, test_hash in enumerate(test_hashes[outside]):
-            print test_hash
             test_particle = self.sim.get_particle_by_hash(int(test_hash))
             pos, vel = reboundparticle_to_array(test_particle)
             energy =  (0.5*np.sum(vel**2, axis=-1) - 1.0/dist[outside][index])
