@@ -128,6 +128,31 @@ class BinarySim(object):
                       "vel":np.full(path_shape, float_fill, dtype="float64")}
         self.cur_pos = np.full((self.sim.N, self.space_dim), float_fill)
 
+    def initalize_times(self, times, abs_tol=10**(-12)):
+        """
+        Type-check the passed record times. The times must be an
+        iterable with a first element of 0.  This sets self.times
+        """
+        times = np.asarray(times, dtype=float)
+        if times.ndim == 0:
+            times.reshape(1)
+        elif times.ndim != 1:
+            raise ValueError("Passed record times must be 1D or scalar")
+        if np.isclose(0.0, times[0], atol=abs_tol):
+            self.times = times
+        else:  # force first record time to be t=0
+            self.times = np.zeros(times.size + 1, dtype=float)
+            self.times[1:] = times
+
+    def snapshot(self, index):
+        """ Save all particle states to memory; index marks the time """
+        hashes = np.zeros(self.sim.N, dtype="uint32")
+        pos = np.full((self.sim.N, self.space_dim), np.nan, dtype="float64")
+        vel = np.full((self.sim.N, self.space_dim), np.nan, dtype="float64")
+        self.sim.serialize_particle_data(hash=hashes, xyz=pos, vxvyvz=vel)
+        self.paths["pos"][hashes, :, index] = pos
+        self.paths["vel"][hashes, :, index] = vel
+
     def run(self, times):
         """
         Integrate the simulation from the current time to the passed
@@ -139,26 +164,15 @@ class BinarySim(object):
             Times at which to record particles' state
 
         Sets:
-        paths - nested dict of arrays
-            paths["test"]["pos"][n] is a (3, N) array giving the
-            Cartesian position coordinates as a function of time for 
-            the test particle with hash of n.  N is the number of time
-            samples taken. "pos" -> "vel" gives analogously the
-            Cartesian velocities. "test" -> "binary" gives the position
-            or velocity of the binary members, with n=0 the more
-            massive body and n=1 the less massive.  NaNs indicate that
-            the particle has been removed from the simulation. 
+        paths - dict of arrays
+            paths["pos"][n] is a (3, T) array giving the Cartesian
+            position as a function of time for the particle with hash
+            n. n can be [0, 2 + N], with N the number of test particles
+            in the simulation. T is the number of time samples taken.
+            "pos" -> "vel" gives analogously the velocities. NaNs show
+            that the particle has been removed from the simulation. 
         """
-        times = np.asarray(times, dtype=float)
-        if times.ndim == 0:
-            times.reshape(1)
-        elif times.ndim != 1:
-            raise ValueError("Passed record times must be 1D or scalar")
-        if np.isclose(0.0, times[0], atol=10**(-12)):
-            self.times = times
-        else:  # force first record time to be t=0
-            self.times = np.zeros(times.size + 1, dtype=float)
-            self.times[1:] = times
+        self.initalize_times(times)
         self.allocate_simulation_trackers()
         # run simulation
         for time_index, t in enumerate(self.times):
@@ -166,13 +180,7 @@ class BinarySim(object):
                 self.sim.integrate(t) # advance simulation to time t
             except rb.Escape:
                 self.process_escape()
-            # record simulation state
-            hashes = np.zeros(self.sim.N, dtype="uint32")
-            pos = np.full((self.sim.N, 3), np.nan, dtype="float64")
-            vel = np.full((self.sim.N, 3), np.nan, dtype="float64")
-            self.sim.serialize_particle_data(hash=hashes, xyz=pos, vxvyvz=vel)
-            self.paths["pos"][hashes, :, time_index] = pos
-            self.paths["vel"][hashes, :, time_index] = vel
+            self.snapshot(time_index)
 
     def get_all_coords(self, target):
         """ 
