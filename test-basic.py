@@ -23,7 +23,7 @@ bin_radius = 0.1
 test_start_distance = 0.15
 test_start_speed_out = 1.0
 test_start_speed_in = 2.5
-num_tests = 20  # per direction, per binary
+num_tests = 80  # per direction, per binary
 mass_ratio = 0.6
 ecc = 0.2
 test_per_binary = int(num_tests*2)
@@ -45,4 +45,4 @@ for binary_start in [bin0_start, bin1_start]:
         vel = start_vel*random_dirs
         test_sim.add_test_particles(pos, vel)
 test_sim.run(times)
-test_sim.save_sim()
+# test_sim.save_sim()

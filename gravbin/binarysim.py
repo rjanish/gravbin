@@ -77,6 +77,8 @@ class BinarySim(object):
             # hash must be an unsigned-integer, so binary will carry hashes
             # of 0, 1, with test particles hashes 2, 3, 4, ... 
         self.sim.move_to_com()
+        self.beat_counter = 0
+        self.snapshot_counter = 0
 
     def add_test_particles(self, pos, vel):
         """
@@ -130,9 +132,10 @@ class BinarySim(object):
                       "pos":np.full((test_state_shape), float_fill), 
                       "vel":np.full((test_state_shape), float_fill)}
         self.escp_cntr = 0
-        path_shape = (self.sim.N, self.space_dim, self.times.size)
-        self.paths = {"pos":np.full(path_shape, float_fill, dtype="float64"), 
-                      "vel":np.full(path_shape, float_fill, dtype="float64")}
+        # path_shape = (self.sim.N, self.space_dim, self.times.size)
+        # self.paths = {"pos":np.full(path_shape, float_fill, dtype="float64"), 
+        #               "vel":np.full(path_shape, float_fill, dtype="float64")}
+        self.paths = {"pos":[],  "vel":[]}
         self.cur_pos = np.full((self.sim.N, self.space_dim), float_fill)
 
     def initalize_times(self, times, abs_tol=10**(-12)):
@@ -157,8 +160,15 @@ class BinarySim(object):
         pos = np.full((self.sim.N, self.space_dim), np.nan, dtype="float64")
         vel = np.full((self.sim.N, self.space_dim), np.nan, dtype="float64")
         self.sim.serialize_particle_data(hash=hashes, xyz=pos, vxvyvz=vel)
-        self.paths["pos"][hashes, :, index] = pos
-        self.paths["vel"][hashes, :, index] = vel
+        all_pos = np.full((2 + self.N_test_start, self.space_dim),
+                          np.nan, dtype="float64")
+        all_pos[hashes] = pos
+        all_vel = np.full((2 + self.N_test_start, self.space_dim),
+                          np.nan, dtype="float64")
+        all_vel[hashes] = vel        
+        self.paths["pos"].append(all_pos)
+        self.paths["vel"].append(all_vel)
+        self.snapshot_counter += 1
 
     def run(self, times):
         """
@@ -182,15 +192,22 @@ class BinarySim(object):
         self.initalize_times(times)
         self.allocate_simulation_trackers()
         # run simulation
-        for time_index, t in enumerate(self.times):
-            if self.sim.N == 2:  # all test particles have been removed
-                break
-            while self.sim.t < t:
-                try:
-                    self.sim.integrate(t) # advance simulation to time t
-                except rb.Escape:
-                    self.process_escape()
-            self.snapshot(time_index)
+        # for time_index, t in enumerate(self.times):
+        #     if self.sim.N == 2:  # all test particles have been removed
+        #         break
+        #     while self.sim.t < t:
+        #         try:
+        #             self.sim.integrate(t) # advance simulation to time t
+        #         except rb.Escape:
+        #             self.process_escape()
+        #     self.snapshot(time_index)
+        while self.sim.t < self.times[-1]:
+            try:
+                self.sim.integrate(self.times[-1]) # advance simulation to end
+            except rb.Escape:
+                self.process_escape()
+                if self.sim.N == 2:  # all test particles have been removed
+                    break
 
     def get_all_coords(self, target):
         """ 
@@ -222,6 +239,8 @@ class BinarySim(object):
         """ This function runs every simulation timestep """
         self.update_positions()
         self.check_for_collision()
+        self.beat_counter += 1
+        self.snapshot(self.snapshot_counter)
 
     def process_escape(self):
         """ 
