@@ -23,14 +23,14 @@ bin_radius = 0.1
 test_start_distance = 0.15
 test_start_speed_out = 1.0
 test_start_speed_in = 2.5
-num_tests = 20 # per direction, per binary
+num_tests = 20  # per direction, per binary
 mass_ratio = 0.6
 ecc = 0.2
 test_per_binary = int(num_tests*2)
 
 T = 2*np.pi
 orbits = 10
-samples_per_orbit = 500
+samples_per_orbit = 1
 times = np.linspace(0, orbits*T, orbits*samples_per_orbit)
 
 test_sim = gb.BinarySim(mass_ratio=mass_ratio, radius0=bin_radius, 

@@ -142,7 +142,7 @@ class BinarySim(object):
         """
         times = np.asarray(times, dtype=float)
         if times.ndim == 0:
-            times.reshape(1)
+            times = times.reshape(1)
         elif times.ndim != 1:
             raise ValueError("Passed record times must be 1D or scalar")
         if np.isclose(0.0, times[0], atol=abs_tol):
@@ -185,10 +185,11 @@ class BinarySim(object):
         for time_index, t in enumerate(self.times):
             if self.sim.N == 2:  # all test particles have been removed
                 break
-            try:
-                self.sim.integrate(t) # advance simulation to time t
-            except rb.Escape:
-                self.process_escape()
+            while self.sim.t < t:
+                try:
+                    self.sim.integrate(t) # advance simulation to time t
+                except rb.Escape:
+                    self.process_escape()
             self.snapshot(time_index)
 
     def get_all_coords(self, target):
