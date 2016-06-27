@@ -29,7 +29,7 @@ class BinarySim(object):
     during closest approach (t=0). 
     """
     def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius_0=0.0,
-                 radius_1=0.0, boundary_size=100.0, label=None):
+                 radius_1=0.0, boundary=100.0, label=None, verbose=False):
         """
         Set the initial state of the binary.
 
@@ -46,6 +46,8 @@ class BinarySim(object):
             cross this boundary are removed from the simulation.
         label - stringable
             Label for the simulation 
+        verbose - bool, default False
+            If True, print simulation updates to stdout
         """
         # binary specifications
         self.mr = float(mass_ratio)
@@ -55,15 +57,16 @@ class BinarySim(object):
         self.bin_sep_min = 1 - self.ecc
         self.radius_0 = float(radius_0)
         self.radius_1 = float(radius_1)
-        self.boundary_size = float(boundary_size)
+        self.boundary = float(boundary)
         self.label = str(label)
+        self.verbose = bool(verbose)
         # initialize simulation
         self.space_dim = 3
         self.m1 = self.mr
         self.m2 = 1 - self.mr
         self.N_test_start = 0  # starting number of test particles
         self.sim = rb.Simulation()
-        self.sim.exit_max_distance = self.boundary_size
+        self.sim.exit_max_distance = self.boundary
         self.sim.heartbeat = self.heartbeat  # called every timestep
         self.sim.add(m=self.m1, r=self.radius_0, hash=0)  
         self.sim.add(m=self.m2, r=self.radius_1, hash=1, a=1.0, e=self.ecc)
@@ -176,6 +179,8 @@ class BinarySim(object):
         self.allocate_simulation_trackers()
         # run simulation
         for time_index, t in enumerate(self.times):
+            if self.sim.N == 2:  # all test particles have been removed
+                break
             try:
                 self.sim.integrate(t) # advance simulation to time t
             except rb.Escape:
@@ -219,7 +224,7 @@ class BinarySim(object):
         """
         test_coords = self.get_all_coords("test")
         dist = np.sqrt(np.sum(test_coords**2, axis=-1))
-        outside = dist >= self.boundary_size
+        outside = dist >= self.boundary
         test_hashes = self.get_active_test_hashes()
         for index, test_hash in enumerate(test_hashes[outside]):
             test_particle = self.sim.get_particle_by_hash(int(test_hash))
@@ -234,7 +239,9 @@ class BinarySim(object):
             self.escps["hash"][self.escp_cntr] = test_hash
             self.escps["pos"][self.escp_cntr] = pos
             self.escps["vel"][self.escp_cntr] = vel
-            print "t={}: removing {} - escape".format(self.sim.t, test_hash)
+            if self.verbose:
+                print ("t={}: removing {} - escape"
+                       "".format(self.sim.t, test_hash))
             self.sim.remove(hash=int(test_hash))
                 # selecting from numpy int array does not return python int,
                 # but rather numpy.int32, which fails rebound's type checks 
@@ -276,8 +283,9 @@ class BinarySim(object):
                     self.colls["bin_hash"][self.coll_cntr] = bin_hash
                     self.colls["bin_pos"][self.coll_cntr] = bin_pos
                     # remove colliding particle
-                    print ("t={}: removing {} - collision with binary {}"
-                           "".format(self.sim.t, test_hash, bin_hash))
+                    if self.verbose:
+                        print ("t={}: removing {} - collision with binary {}"
+                               "".format(self.sim.t, test_hash, bin_hash))
                     self.sim.remove(hash=int(test_hash)) # see process_escape
                     self.coll_cntr += 1
 
