@@ -9,6 +9,8 @@ import warnings
 import numpy as np
 import rebound as rb
 
+import utilities as utl
+
 
 class BinarySim(object):
     """
@@ -29,7 +31,7 @@ class BinarySim(object):
     during closest approach (t=0). 
     """
     def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius_0=0.0,
-                 radius_1=0.0, boundary=100.0, label=None, verbose=False):
+                 radius_1=0.0, boundary=100.0, label="binsim", verbose=False):
         """
         Set the initial state of the binary.
 
@@ -296,6 +298,27 @@ class BinarySim(object):
         test_hashes = hashes[2:]
         return test_hashes
 
+    def save_simulation(self, filename="{}.p".format(self.label)):
+        """
+        """
+        sim_info = {"mr":self.mr,
+                    "ecc":self.ecc,
+                    "period":self.period,
+                    "bin_sep_max":self.bin_sep_max,
+                    "bin_sep_min":self.bin_sep_min,
+                    "radius_0":self.radius_0,
+                    "radius_1":self.radius_1,
+                    "boundary":self.boundary,
+                    "label":self.label,
+                    "colls":self.colls,
+                    "coll_cntr":self.coll_cntr,
+                    "escps":self.escps,
+                    "escp_cntr":self.escp_cntr,
+                    "paths":self.paths,
+                    "cur_pos":self.cur_pos,
+                    "times":self.times,
+                    "cur_time":self.sim.time}
+        utl.save_pickle(sim_info, filename)
 
 def reboundparticle_to_array(p):
     """
