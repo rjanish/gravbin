@@ -7,9 +7,11 @@ particles about a binary using the Rebound package.
 import warnings
 
 import numpy as np
+import matplotlib.pyplot as plt
 import rebound as rb
 
 import utilities as utl
+import gravbin as gb
 
 
 class BinarySim(object):
@@ -30,8 +32,8 @@ class BinarySim(object):
     massive body along the -x axis (and the less massive along +x)
     during closest approach (t=0). 
     """
-    def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius_0=0.0,
-                 radius_1=0.0, boundary=100.0, label="binsim", verbose=False):
+    def __init__(self, mass_ratio=0.5, eccentricity=0.0, radius0=0.0,
+                 radius1=0.0, boundary=100.0, label="binsim", verbose=False):
         """
         Set the initial state of the binary.
 
@@ -57,8 +59,8 @@ class BinarySim(object):
         self.period = 2*np.pi*(1.0 + self.ecc)**(-1.5)
         self.bin_sep_max = 1 + self.ecc
         self.bin_sep_min = 1 - self.ecc
-        self.radius_0 = float(radius_0)
-        self.radius_1 = float(radius_1)
+        self.radius0 = float(radius0)
+        self.radius1 = float(radius1)
         self.boundary = float(boundary)
         self.label = str(label)
         self.verbose = bool(verbose)
@@ -70,8 +72,8 @@ class BinarySim(object):
         self.sim = rb.Simulation()
         self.sim.exit_max_distance = self.boundary
         self.sim.heartbeat = self.heartbeat  # called every timestep
-        self.sim.add(m=self.m1, r=self.radius_0, hash=0)  
-        self.sim.add(m=self.m2, r=self.radius_1, hash=1, a=1.0, e=self.ecc)
+        self.sim.add(m=self.m1, r=self.radius0, hash=0)  
+        self.sim.add(m=self.m2, r=self.radius1, hash=1, a=1.0, e=self.ecc)
             # hash must be an unsigned-integer, so binary will carry hashes
             # of 0, 1, with test particles hashes 2, 3, 4, ... 
         self.sim.move_to_com()
@@ -258,19 +260,19 @@ class BinarySim(object):
         binary_coords = self.get_all_coords("binary")
         # check all test particles against binary member 0
         dist0_sq = np.sum((test_coords - binary_coords[0])**2, axis=-1)
-        colliding0 = dist0_sq < self.radius_0**2
+        colliding0 = dist0_sq < self.radius0**2
         # check all test particles against binary member 1
         bin_sep = np.sqrt(np.sum((binary_coords[0] -
                                   binary_coords[1])**2, axis=-1))
-        min_dist0_sq = (bin_sep - self.radius_1)**2
-        max_dist0_sq = (bin_sep + self.radius_1)**2
+        min_dist0_sq = (bin_sep - self.radius1)**2
+        max_dist0_sq = (bin_sep + self.radius1)**2
             # min and max distances from binary 0 which
             # can give a collision with binary 1
         to_check = (min_dist0_sq <= dist0_sq) & (dist0_sq <= max_dist0_sq)
         dist1_sq = np.sum((test_coords[to_check] - 
                            binary_coords[1])**2, axis=-1)
         colliding1 = np.zeros(colliding0.shape, dtype=bool)
-        colliding1[to_check] = dist1_sq < self.radius_1**2
+        colliding1[to_check] = dist1_sq < self.radius1**2
         # process collisions
         if np.any(colliding0 | colliding1) > 0:
             test_hashes = self.get_active_test_hashes()
@@ -298,16 +300,18 @@ class BinarySim(object):
         test_hashes = hashes[2:]
         return test_hashes
 
-    def save_simulation(self, filename="{}.p".format(self.label)):
+    def save_sim(self, filename=None):
         """
         """
+        if filename is None:
+            filename = "{}.p".format(self.label)
         sim_info = {"mr":self.mr,
                     "ecc":self.ecc,
                     "period":self.period,
                     "bin_sep_max":self.bin_sep_max,
                     "bin_sep_min":self.bin_sep_min,
-                    "radius_0":self.radius_0,
-                    "radius_1":self.radius_1,
+                    "radius0":self.radius0,
+                    "radius1":self.radius1,
                     "boundary":self.boundary,
                     "label":self.label,
                     "colls":self.colls,
@@ -317,8 +321,18 @@ class BinarySim(object):
                     "paths":self.paths,
                     "cur_pos":self.cur_pos,
                     "times":self.times,
-                    "cur_time":self.sim.time}
+                    "cur_time":self.sim.t}
         utl.save_pickle(sim_info, filename)
+        fig, ax = gb.plot_sim_verbose(self)
+        initial = np.absolute(self.paths["pos"][2:, :, 0]).max()
+        boxes = [initial*1.03, 2.5, self.boundary*1.03]
+        names = ['starting', 'central', 'boundary']
+        for box, name in zip(boxes, names):
+            ax.set_xlim(-box, box) 
+            ax.set_ylim(-box, box)
+            fig.savefig("{}-{}.png".format(self.label, name))
+        plt.close("all")
+
 
 def reboundparticle_to_array(p):
     """
