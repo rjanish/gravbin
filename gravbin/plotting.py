@@ -20,7 +20,6 @@ def plot_orbits_inertial(binsim, ax=None, alpha=0.6, **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
     paths = binsim.paths
-    times = binsim.times
     test_x = paths["pos"][2:, 0].T  # (time, particle)
     test_y = paths["pos"][2:, 1].T
     ax.plot(test_x, test_y, alpha=alpha, **kwargs)

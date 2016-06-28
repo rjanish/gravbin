@@ -61,34 +61,36 @@ class BinarySim(object):
         self.bin_sep_min = 1 - self.ecc
         self.radius0 = float(radius0)
         self.radius1 = float(radius1)
+        # simulation specifications
         self.boundary = float(boundary)
         self.label = str(label)
         self.verbose = bool(verbose)
         # initialize simulation
+        self.N_test_start = 0  # test particles before collisions/escapes
+        self.initial = None  # binary and test particle initial states (t=0)
+        self.target_time = None
+        self.cur_pos = None
+            # above are updated when particles added/integration starts
         self.space_dim = 3
-        self.m1 = self.mr
-        self.m2 = 1 - self.mr
-        self.N_test_start = 0  # starting number of test particles
+        self.m0 = self.mr
+        self.m1 = 1 - self.mr
         self.sim = rb.Simulation()
         self.sim.exit_max_distance = self.boundary
         self.sim.heartbeat = self.heartbeat  # called every timestep
-        self.sim.add(m=self.m1, r=self.radius0, hash=0)  
-        self.sim.add(m=self.m2, r=self.radius1, hash=1, a=1.0, e=self.ecc)
-            # hash must be an unsigned-integer, so binary will carry hashes
-            # of 0, 1, with test particles hashes 2, 3, 4, ... 
+        self.sim.add(m=self.m0, r=self.radius0, hash=0)  # binary0
+        self.sim.add(m=self.m1, r=self.radius1, hash=1,  # binary1
+                     a=1.0, e=self.ecc)
         self.sim.N_active = 2  # rebound will ignore test-particle gravity
         self.sim.move_to_com()
-        self.beat_counter = 0
-        self.snapshot_counter = 0
 
     def add_test_particles(self, pos, vel):
         """
         Add an array of test particles (mass = 0) to the simulation. 
         Particle hash number will be assigned by their order in the 
         passed pos and vel arrays: the particle with hash n is added
-        with position pos[n] and vel[n].
+        with position pos[n] and vel[n]. 
 
-        Currently, all test particles must be added in one call.
+        Currently, particles can only be added at time t=0.
 
         Args:
         pos - ndarraylike shape (N, 3)
@@ -102,12 +104,18 @@ class BinarySim(object):
             raise RuntimeError("can only add test particles at time t=0; "
                                "simulation time is t={}".format(self.sim.t))
         starting_hash = 2 + self.N_test_start
-            # binary stars use hash 0, 1; test particles 2, 3, 4, ...
+            # binary stars use hash 0, 1; test particles use 2, 3, 4, ...
         for index, [(x, y, z), (vx, vy, vz)] in enumerate(zip(pos, vel)):
             self.sim.add(x=x, y=y, z=z, vx=vx, vy=vy, vz=vz,
                          hash=starting_hash + index)
                 # mass defaults to 0 (test particle); radius defaults to 0
         self.N_test_start = self.sim.N - 2
+        self.initial = {'pos':self.bucket("coord", "all"),
+                        'vel':self.bucket("coord", "all"),
+                        'hash':self.bucket("hash", "all")}
+        self.sim.serialize_particle_data(xyz=self.initial["pos"],
+                                         vxvyvz=self.initial["vel"],
+                                         hash=self.initial["hash"])
 
     def allocate_simulation_trackers(self):
         """ 
@@ -118,101 +126,66 @@ class BinarySim(object):
         likely contain empty slots after the simulation ends. The
         'empty' initializing value is np.nan for float and -1 for int.
         """
-        test_state_shape = (self.N_test_start, self.space_dim)
-        float_fill, int_fill = np.nan, -1
-        self.colls = {"time":np.full(self.N_test_start, float_fill),
-                      "bin_pos":np.full((test_state_shape), float_fill), 
-                      "bin_hash":np.full(self.N_test_start,
-                                         int_fill, dtype=int),
-                      "test_pos":np.full((test_state_shape), float_fill), 
-                      "test_hash":np.full(self.N_test_start,
-                                          int_fill, dtype=int)}
+        self.colls = {"time":self.bucket("scalar", "all"), 
+                      "bin_pos":self.bucket("coord", "all"), 
+                      "bin_hash":self.bucket("hash", "all"),   
+                      "test_pos":self.bucket("coord", "all"), 
+                      "test_hash":self.bucket("hash", "all")}  
         self.coll_cntr = 0 
-        self.escps = {"time":np.full(self.N_test_start, float_fill), 
-                      "hash":np.full(self.N_test_start, int_fill, dtype=int), 
-                      "pos":np.full((test_state_shape), float_fill), 
-                      "vel":np.full((test_state_shape), float_fill)}
+        self.escps = {"time":self.bucket("scalar", "all"),
+                      "hash":self.bucket("hash", "all"), 
+                      "pos":self.bucket("coord", "all"),
+                      "vel":self.bucket("coord", "all")}
         self.escp_cntr = 0
-        # path_shape = (self.sim.N, self.space_dim, self.times.size)
-        # self.paths = {"pos":np.full(path_shape, float_fill, dtype="float64"), 
-        #               "vel":np.full(path_shape, float_fill, dtype="float64")}
-        self.paths = {"pos":[],  "vel":[]}
-        self.cur_pos = np.full((self.sim.N, self.space_dim), float_fill)
+        self.paths = {"pos":[],  "vel":[], "time":[]}
 
-    def initalize_times(self, times, abs_tol=10**(-12)):
-        """
-        Type-check the passed record times. The times must be an
-        iterable with a first element of 0.  This sets self.times
-        """
-        times = np.asarray(times, dtype=float)
-        if times.ndim == 0:
-            times = times.reshape(1)
-        elif times.ndim != 1:
-            raise ValueError("Passed record times must be 1D or scalar")
-        if np.isclose(0.0, times[0], atol=abs_tol):
-            self.times = times
-        else:  # force first record time to be t=0
-            self.times = np.zeros(times.size + 1, dtype=float)
-            self.times[1:] = times
-
-    def snapshot(self, index):
-        """ Save all particle states to memory; index marks the time """
-        hashes = np.zeros(self.sim.N, dtype="uint32")
-        pos = np.full((self.sim.N, self.space_dim), np.nan, dtype="float64")
-        vel = np.full((self.sim.N, self.space_dim), np.nan, dtype="float64")
+    def record(self):
+        """ Save all particle states to memory; updates paths attribute """
+        # get temporary containers for all remaining particles
+        hashes = self.bucket("hash", "current")
+        pos = self.bucket("coord", "current")
+        vel = self.bucket("coord", "current")
         self.sim.serialize_particle_data(hash=hashes, xyz=pos, vxvyvz=vel)
-        all_pos = np.full((2 + self.N_test_start, self.space_dim),
-                          np.nan, dtype="float64")
+        # fill data into containers for all particles, including coll/escp
+        all_pos = self.bucket("coord", "all")
         all_pos[hashes] = pos
-        all_vel = np.full((2 + self.N_test_start, self.space_dim),
-                          np.nan, dtype="float64")
-        all_vel[hashes] = vel        
+        all_vel = self.bucket("coord", "all")
+        all_vel[hashes] = vel   
+            # bucket fills np.nan --> escp/coll particles are recorded as nan     
         self.paths["pos"].append(all_pos)
         self.paths["vel"].append(all_vel)
-        self.snapshot_counter += 1
+        self.paths["time"].append(self.sim.t)
 
-    def run(self, times):
+    def run(self, target_time, record=True):
         """
         Integrate the simulation from the current time to the passed
-        times, recording the states of all particles at each passed
-        time. Results are recorded in the paths attribute.
-
-        Args:
-        times - 1D ndarraylike 
-            Times at which to record particles' state
+        target_time. If record is set, the states of all particles will
+        be saved in the paths attribute at each integration timestep.
 
         Sets:
         paths - dict of arrays
             paths["pos"][n] is a (3, T) array giving the Cartesian
             position as a function of time for the particle with hash
             n. n can be [0, 2 + N], with N the number of test particles
-            in the simulation. T is the number of time samples taken.
+            in the simulation. T is the number of timesteps taken.
             "pos" -> "vel" gives analogously the velocities. NaNs show
             that the particle has been removed from the simulation. 
         """
-        self.initalize_times(times)
+        self.target_time = float(target_time)
         self.allocate_simulation_trackers()
-        # run simulation
-        # for time_index, t in enumerate(self.times):
-        #     if self.sim.N == 2:  # all test particles have been removed
-        #         break
-        #     while self.sim.t < t:
-        #         try:
-        #             self.sim.integrate(t) # advance simulation to time t
-        #         except rb.Escape:
-        #             self.process_escape()
-        #     self.snapshot(time_index)
-        while self.sim.t < self.times[-1]:
+        while self.sim.t < self.target_time:
             try:
-                self.sim.integrate(self.times[-1]) # advance simulation to end
+                self.sim.integrate(self.target_time) # advance simulation to end
             except rb.Escape:
                 self.process_escape()
                 if self.sim.N == 2:  # all test particles have been removed
                     break
+        # CLEAN
         self.paths['pos'] = np.asarray(self.paths['pos'])
         self.paths['vel'] = np.asarray(self.paths['vel'])
+        self.paths['time'] = np.asarray(self.paths['time'])
 
-    def get_all_coords(self, target):
+    def get_coords(self, target):
         """ 
         Returns array of target particles' xyz coordinates. Target can
         be either 'binary' or 'test' to fetch the binary's coordinates
@@ -232,24 +205,22 @@ class BinarySim(object):
 
     def update_positions(self):
         """ Set self.cur_pos with all current particle positions """
-        pos_array_size = (self.sim.N, 3)
         if ((self.cur_pos is None) or                 # first call
-            (self.cur_pos.shape != pos_array_size)):  # particles were removed
-            self.cur_pos = np.zeros((self.sim.N, 3), dtype="float64")
+            (self.cur_pos.shape[0] != self.sim.N)):  # particles were removed
+            self.cur_pos = self.bucket("coord", "current")
         self.sim.serialize_particle_data(xyz=self.cur_pos)
 
     def heartbeat(self, internal_sim_object):
         """ This function runs every simulation timestep """
         self.update_positions()
         self.check_for_collision()
-        self.beat_counter += 1
-        self.snapshot(self.snapshot_counter)
+        self.record()
 
     def process_escape(self):
         """ 
         Rebound has detected an escaped particle - remove it from simulation
         """
-        test_coords = self.get_all_coords("test")
+        test_coords = self.get_coords("test")
         dist = np.sqrt(np.sum(test_coords**2, axis=-1))
         outside = dist >= self.boundary
         test_hashes = self.get_active_test_hashes()
@@ -279,8 +250,8 @@ class BinarySim(object):
         Check for test particle + binary collisions, record and remove
         from the simulation.
         """
-        test_coords = self.get_all_coords("test")
-        binary_coords = self.get_all_coords("binary")
+        test_coords = self.get_coords("test")
+        binary_coords = self.get_coords("binary")
         # check all test particles against binary member 0
         dist0_sq = np.sum((test_coords - binary_coords[0])**2, axis=-1)
         colliding0 = dist0_sq < self.radius0**2
@@ -323,11 +294,15 @@ class BinarySim(object):
         test_hashes = hashes[2:]
         return test_hashes
 
-    def save_sim(self, filename=None):
+    def save_sim(self, filebase=None):
         """
+        Output simulation data to pickle and plot current trajectories.
+        The passed filename will be used for both pickle and plots,
+        and defaults to the simulation's label attribute.
         """
-        if filename is None:
-            filename = "{}.p".format(self.label)
+        if filebase is None:
+            filebase = self.label
+        pickle_filename = "{}.p".format(filebase)
         sim_info = {"mr":self.mr,
                     "ecc":self.ecc,
                     "period":self.period,
@@ -343,18 +318,63 @@ class BinarySim(object):
                     "escp_cntr":self.escp_cntr,
                     "paths":self.paths,
                     "cur_pos":self.cur_pos,
-                    "times":self.times,
-                    "cur_time":self.sim.t}
-        utl.save_pickle(sim_info, filename)
+                    "target_time":self.target_time,
+                    "cur_time":self.sim.t,
+                    "initial":self.initial}
+        utl.save_pickle(sim_info, pickle_filename)
         fig, ax = gb.plot_sim_verbose(self)
         initial = np.absolute(self.paths["pos"][2:, :, 0]).max()
-        boxes = [initial*1.03, 2.5, self.boundary*1.03]
+        boxes = [initial*1.03, 2.5, self.boundary*1.03] # magic
         names = ['starting', 'central', 'boundary']
         for box, name in zip(boxes, names):
             ax.set_xlim(-box, box) 
             ax.set_ylim(-box, box)
-            fig.savefig("{}-{}.png".format(self.label, name))
+            fig.savefig("{}-{}.png".format(filebase, name))
         plt.close("all")
+
+    def bucket(self, desc, num, shape=None, dtype=None, fill=None):
+        """
+        Generate a blank numpy array to hold data of the passed
+        description for a number num of particles. num can be integer,
+        or a string flag: 'all' makes enough space for every particle
+        in the simulation, including those which have been removed by
+        collision or escape, and 'current' stores only particles
+        currently being integrated.  The size, dtype, and fill values
+        are be determined from desc and num unless explicitly passed.
+        Default particle numbers include the two binary members.
+        """
+        # get number of particles
+        if num == 'all':
+            N = self.N_test_start + 2
+        elif num == 'current':
+            N = self.sim.N 
+        else:
+            N = int(num)
+        # make array
+        if desc == "coord":
+            if shape is None:
+                shape = (N, self.space_dim)
+            if fill is None:
+                fill = np.nan
+            if dtype is None:
+                dtype = "float64"
+        elif desc == "hash":
+            if shape is None:
+                shape = (N,)
+            if fill is None:
+                fill = 0
+            if dtype is None:
+                dtype = "uint32"
+        elif desc == "scalar":
+            if shape is None:
+                shape = (N,)
+            if fill is None:
+                fill = np.nan
+            if dtype is None:
+                dtype = "float64"
+        else:
+            raise ValueError("Unrecognized desc {}".format(desc))
+        return np.full(shape, fill, dtype=dtype)
 
 
 def reboundparticle_to_array(p):

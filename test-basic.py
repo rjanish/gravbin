@@ -23,18 +23,15 @@ bin_radius = 0.1
 test_start_distance = 0.15
 test_start_speed_out = 1.0
 test_start_speed_in = 2.5
-num_tests = 80  # per direction, per binary
+num_tests = 10  # per direction, per binary
 mass_ratio = 0.6
 ecc = 0.2
 test_per_binary = int(num_tests*2)
-
-T = 2*np.pi
 orbits = 10
-samples_per_orbit = 1
-times = np.linspace(0, orbits*T, orbits*samples_per_orbit)
 
 test_sim = gb.BinarySim(mass_ratio=mass_ratio, radius0=bin_radius, 
                         radius1=bin_radius, eccentricity=ecc, label='testsim')
+final_time = test_sim.period*orbits
 bin0_start = np.array([(mass_ratio - 1)*test_sim.bin_sep_min, 0, 0])
 bin1_start = np.array([mass_ratio*test_sim.bin_sep_min, 0, 0])
 for binary_start in [bin0_start, bin1_start]:
@@ -44,5 +41,5 @@ for binary_start in [bin0_start, bin1_start]:
         pos = binary_start + test_start_distance*random_dirs
         vel = start_vel*random_dirs
         test_sim.add_test_particles(pos, vel)
-test_sim.run(times)
-# test_sim.save_sim()
+test_sim.run(final_time)
+test_sim.save_sim()

@@ -53,7 +53,7 @@ for num_index, num_tests in enumerate(all_num_tests):
         timing[index, 0] = num_tests
         timing[index, 1] = timed_radial_test(num_tests, orbits, samples_per_orbit,
                                              name, mass_ratio=mass_ratio, ecc=ecc)
-        print "ran in {} seconds".format(num_tests, timing[index, 1])
+        print "ran in {} seconds".format(timing[index, 1])
     np.savetxt("timetest.dat", timing)
     fig, ax = plt.subplots()
     ax.plot(*timing.T, marker='.', linestyle='', color='k')
