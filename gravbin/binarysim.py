@@ -76,6 +76,7 @@ class BinarySim(object):
         self.sim.add(m=self.m2, r=self.radius1, hash=1, a=1.0, e=self.ecc)
             # hash must be an unsigned-integer, so binary will carry hashes
             # of 0, 1, with test particles hashes 2, 3, 4, ... 
+        self.N_active = 2  # rebound will ignore test-particle gravity
         self.sim.move_to_com()
         self.beat_counter = 0
         self.snapshot_counter = 0
@@ -208,6 +209,8 @@ class BinarySim(object):
                 self.process_escape()
                 if self.sim.N == 2:  # all test particles have been removed
                     break
+        self.paths['pos'] = np.asarray(self.paths['pos'])
+        self.paths['vel'] = np.asarray(self.paths['vel'])
 
     def get_all_coords(self, target):
         """ 
