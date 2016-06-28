@@ -32,7 +32,7 @@ ecc = 0.2
 test_per_binary = int(num_tests*2)
 orbits = 10
 
-test_sim = gb.BinarySim(mass_ratio=mass_ratio, radius0=bin_radius, 
+test_sim = gb.BinarySim(mass_ratio=mass_ratio, radius0=bin_radius,
                         radius1=bin_radius, eccentricity=ecc, label='testsim')
 final_time = test_sim.period*orbits
 bin0_start = np.array([(mass_ratio - 1)*test_sim.bin_sep_min, 0, 0])

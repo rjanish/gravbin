@@ -260,7 +260,8 @@ class BinarySim(object):
                        "".format(self.sim.t, test_hash))
             self.sim.remove(hash=int(test_hash))
                 # selecting from numpy int array does not return python int,
-                # but rather numpy.int32, which fails rebound's type checks 
+                # but rather numpy.int32, which fails rebound's type checks
+            self.update_positions() 
             self.escps["number"] += 1
 
     def check_for_collision(self):
@@ -303,6 +304,7 @@ class BinarySim(object):
                         print ("t={}: removing {} - collision with binary {}"
                                "".format(self.sim.t, test_hash, bin_hash))
                     self.sim.remove(hash=int(test_hash)) # see process_escape
+                    self.update_positions()
                     self.colls["number"] += 1
 
     def get_active_test_hashes(self):
