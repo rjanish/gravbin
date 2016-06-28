@@ -130,13 +130,15 @@ class BinarySim(object):
                       "bin_pos":self.bucket("coord", "all"), 
                       "bin_hash":self.bucket("hash", "all"),   
                       "test_pos":self.bucket("coord", "all"), 
-                      "test_hash":self.bucket("hash", "all")}  
-        self.coll_cntr = 0 
+                      "test_hash":self.bucket("hash", "all"),
+                      "number":0}  
+        self.colls["number"] = 0 
         self.escps = {"time":self.bucket("scalar", "all"),
                       "hash":self.bucket("hash", "all"), 
                       "pos":self.bucket("coord", "all"),
-                      "vel":self.bucket("coord", "all")}
-        self.escp_cntr = 0
+                      "vel":self.bucket("coord", "all"),
+                      "number":0}
+        self.escps["number"] = 0
         self.paths = {"pos":[],  "vel":[], "time":[]}
 
     def record(self):
@@ -155,6 +157,25 @@ class BinarySim(object):
         self.paths["pos"].append(all_pos)
         self.paths["vel"].append(all_vel)
         self.paths["time"].append(self.sim.t)
+
+    def process_outputs(self):
+        """ Reorganize outputs, remove empty data, etc """
+        # clean escapes and collision trackers
+        for container in [self.colls, self.escps]:
+            for key in container:
+                if key is "number": 
+                    continue # number is only entry without possible empties
+                container[key] = container[key][:container["number"], ...]
+                    # strip off unused entries
+        # process paths trackers
+        for key in self.paths:
+            self.paths[key] = np.asarray(self.paths[key])
+            if key == "time":
+                continue
+            self.paths[key] = np.swapaxes(self.paths[key], 0, 1)
+            self.paths[key] = np.swapaxes(self.paths[key], 1, 2)
+                # old axes: (time, particle, coordinate)
+                # new axes: (particle, coordinate, time)
 
     def run(self, target_time, record=True):
         """
@@ -175,15 +196,12 @@ class BinarySim(object):
         self.allocate_simulation_trackers()
         while self.sim.t < self.target_time:
             try:
-                self.sim.integrate(self.target_time) # advance simulation to end
+                self.sim.integrate(self.target_time) 
             except rb.Escape:
                 self.process_escape()
                 if self.sim.N == 2:  # all test particles have been removed
                     break
-        # CLEAN
-        self.paths['pos'] = np.asarray(self.paths['pos'])
-        self.paths['vel'] = np.asarray(self.paths['vel'])
-        self.paths['time'] = np.asarray(self.paths['time'])
+        self.process_outputs()
 
     def get_coords(self, target):
         """ 
@@ -233,17 +251,17 @@ class BinarySim(object):
                 msg = ("time {}: particle {} exited the simulation "
                        "on a *bound* orbit".format(self.sim.t, test_hash))
                 warnings.warn(msg, RuntimeWarning)
-            self.escps["time"][self.escp_cntr] = self.sim.t
-            self.escps["hash"][self.escp_cntr] = test_hash
-            self.escps["pos"][self.escp_cntr] = pos
-            self.escps["vel"][self.escp_cntr] = vel
+            self.escps["time"][self.escps["number"]] = self.sim.t
+            self.escps["hash"][self.escps["number"]] = test_hash
+            self.escps["pos"][self.escps["number"]] = pos
+            self.escps["vel"][self.escps["number"]] = vel
             if self.verbose:
                 print ("t={}: removing {} - escape"
                        "".format(self.sim.t, test_hash))
             self.sim.remove(hash=int(test_hash))
                 # selecting from numpy int array does not return python int,
                 # but rather numpy.int32, which fails rebound's type checks 
-            self.escp_cntr += 1
+            self.escps["number"] += 1
 
     def check_for_collision(self):
         """
@@ -274,18 +292,18 @@ class BinarySim(object):
                 bin_pos = binary_coords[bin_hash]
                 for index, test_hash in enumerate(test_hashes[colliding]):
                     # record collision
-                    self.colls["time"][self.coll_cntr] = self.sim.t
-                    self.colls["test_hash"][self.coll_cntr] = test_hash
+                    self.colls["time"][self.colls["number"]] = self.sim.t
+                    self.colls["test_hash"][self.colls["number"]] = test_hash
                     test_pos = test_coords[colliding][index]
-                    self.colls["test_pos"][self.coll_cntr] = test_pos
-                    self.colls["bin_hash"][self.coll_cntr] = bin_hash
-                    self.colls["bin_pos"][self.coll_cntr] = bin_pos
+                    self.colls["test_pos"][self.colls["number"]] = test_pos
+                    self.colls["bin_hash"][self.colls["number"]] = bin_hash
+                    self.colls["bin_pos"][self.colls["number"]] = bin_pos
                     # remove colliding particle
                     if self.verbose:
                         print ("t={}: removing {} - collision with binary {}"
                                "".format(self.sim.t, test_hash, bin_hash))
                     self.sim.remove(hash=int(test_hash)) # see process_escape
-                    self.coll_cntr += 1
+                    self.colls["number"] += 1
 
     def get_active_test_hashes(self):
         """ """
@@ -313,9 +331,7 @@ class BinarySim(object):
                     "boundary":self.boundary,
                     "label":self.label,
                     "colls":self.colls,
-                    "coll_cntr":self.coll_cntr,
                     "escps":self.escps,
-                    "escp_cntr":self.escp_cntr,
                     "paths":self.paths,
                     "cur_pos":self.cur_pos,
                     "target_time":self.target_time,
