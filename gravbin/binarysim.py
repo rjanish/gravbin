@@ -110,12 +110,7 @@ class BinarySim(object):
                          hash=starting_hash + index)
                 # mass defaults to 0 (test particle); radius defaults to 0
         self.N_test_start = self.sim.N - 2
-        self.initial = {'pos':self.bucket("coord", "all"),
-                        'vel':self.bucket("coord", "all"),
-                        'hash':self.bucket("hash", "all")}
-        self.sim.serialize_particle_data(xyz=self.initial["pos"],
-                                         vxvyvz=self.initial["vel"],
-                                         hash=self.initial["hash"])
+        self.iniital = self.get_active_particle_data("pos", "vel", "hash")
 
     def allocate_simulation_trackers(self):
         """ 
@@ -143,16 +138,12 @@ class BinarySim(object):
 
     def record(self):
         """ Save all particle states to memory; updates paths attribute """
-        # get temporary containers for all remaining particles
-        hashes = self.bucket("hash", "current")
-        pos = self.bucket("coord", "current")
-        vel = self.bucket("coord", "current")
-        self.sim.serialize_particle_data(hash=hashes, xyz=pos, vxvyvz=vel)
+        current = self.get_active_particle_data("pos", "vel", "hash")
         # fill data into containers for all particles, including coll/escp
         all_pos = self.bucket("coord", "all")
-        all_pos[hashes] = pos
+        all_pos[current["hash"]] = current["pos"]
         all_vel = self.bucket("coord", "all")
-        all_vel[hashes] = vel   
+        all_vel[current["hash"]] = current["vel"]   
             # bucket fills np.nan --> escp/coll particles are recorded as nan     
         self.paths["pos"].append(all_pos)
         self.paths["vel"].append(all_vel)
@@ -223,10 +214,11 @@ class BinarySim(object):
 
     def update_positions(self):
         """ Set self.cur_pos with all current particle positions """
-        if ((self.cur_pos is None) or                 # first call
-            (self.cur_pos.shape[0] != self.sim.N)):  # particles were removed
-            self.cur_pos = self.bucket("coord", "current")
-        self.sim.serialize_particle_data(xyz=self.cur_pos)
+        self.cur_pos = self.get_active_particle_data("pos")["pos"]
+            # this generates a new array every time - could instead check the
+            # size of cur_pos, and make a new array only if size has changed
+            # (a particle was removed), and otherwise just fill. 
+            # probably an insignificant speed-up though. 
 
     def heartbeat(self, internal_sim_object):
         """ This function runs every simulation timestep """
@@ -241,7 +233,7 @@ class BinarySim(object):
         test_coords = self.get_coords("test")
         dist = np.sqrt(np.sum(test_coords**2, axis=-1))
         outside = dist >= self.boundary
-        test_hashes = self.get_active_test_hashes()
+        test_hashes = self.get_active_particle_data("hash")["hash"]
         for index, test_hash in enumerate(test_hashes[outside]):
             test_particle = self.sim.get_particle_by_hash(int(test_hash))
             pos, vel = reboundparticle_to_array(test_particle)
@@ -288,7 +280,7 @@ class BinarySim(object):
         colliding1[to_check] = dist1_sq < self.radius1**2
         # process collisions
         if np.any(colliding0 | colliding1) > 0:
-            test_hashes = self.get_active_test_hashes()
+            test_hashes = self.get_active_particle_data("hash")["hash"]
             for bin_hash, colliding in zip([0, 1], [colliding0, colliding1]):
                 bin_pos = binary_coords[bin_hash]
                 for index, test_hash in enumerate(test_hashes[colliding]):
@@ -307,12 +299,27 @@ class BinarySim(object):
                     self.update_positions()
                     self.colls["number"] += 1
 
-    def get_active_test_hashes(self):
-        """ """
-        hashes = np.zeros(self.sim.N, dtype="uint32")
-        self.sim.serialize_particle_data(hash=hashes)
-        test_hashes = hashes[2:]
-        return test_hashes
+    def get_active_particle_data(self, *keys):
+        """
+        Returns new arrays holding the data for each particle still in
+        the simulation. keys may be "pos", "vel", or "hash", and the
+        corresponding arrays are returned in dict with the passed key.
+        """
+        outputs = {}
+        for key in keys:
+            if key == "pos":
+                data = self.bucket("coord", "current")
+                self.sim.serialize_particle_data(xyz=data)
+            elif key == "vel":
+                data = self.bucket("coord", "current")
+                self.sim.serialize_particle_data(vxvyvz=data)
+            elif key == "hash":
+                data = self.bucket("hash", "current")
+                self.sim.serialize_particle_data(hash=data)
+            else:
+                raise ValueError("Unrecognized particle data {}".format(key))
+            outputs[key] = data
+        return outputs
 
     def save_sim(self, filebase=None):
         """
