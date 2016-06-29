@@ -110,7 +110,7 @@ class BinarySim(object):
                          hash=starting_hash + index)
                 # mass defaults to 0 (test particle); radius defaults to 0
         self.N_test_start = self.sim.N - 2
-        self.iniital = self.get_active_particle_data("pos", "vel", "hash")
+        self.iniital = self.get_active_particle_data(["pos", "vel", "hash"])
 
     def allocate_simulation_trackers(self):
         """ 
@@ -138,7 +138,7 @@ class BinarySim(object):
 
     def record(self):
         """ Save all particle states to memory; updates paths attribute """
-        current = self.get_active_particle_data("pos", "vel", "hash")
+        current = self.get_active_particle_data(["pos", "vel", "hash"])
         # fill data into containers for all particles, including coll/escp
         all_pos = self.bucket("coord", "all")
         all_pos[current["hash"]] = current["pos"]
@@ -194,6 +194,20 @@ class BinarySim(object):
                     break
         self.process_outputs()
 
+    def heartbeat(self, internal_sim_object):
+        """ This function runs every simulation timestep """
+        self.update_positions()
+        self.check_for_collision()
+        self.record()
+
+    def update_positions(self):
+        """ Set self.cur_pos with all current particle positions """
+        self.cur_pos = self.get_active_particle_data(["pos"])["pos"]
+            # this generates a new array every time - could instead check the
+            # size of cur_pos, and make a new array only if size has changed
+            # (a particle was removed), and otherwise just re-fill the old 
+            # array. This is probably an insignificant speed-up though. 
+
     def get_coords(self, target):
         """ 
         Returns array of target particles' xyz coordinates. Target can
@@ -212,20 +226,6 @@ class BinarySim(object):
         else:
             raise ValueError("Unrecognized target {}".format(target))
 
-    def update_positions(self):
-        """ Set self.cur_pos with all current particle positions """
-        self.cur_pos = self.get_active_particle_data("pos")["pos"]
-            # this generates a new array every time - could instead check the
-            # size of cur_pos, and make a new array only if size has changed
-            # (a particle was removed), and otherwise just re-fill the old 
-            # array. This is probably an insignificant speed-up though. 
-
-    def heartbeat(self, internal_sim_object):
-        """ This function runs every simulation timestep """
-        self.update_positions()
-        self.check_for_collision()
-        self.record()
-
     def process_escape(self):
         """ 
         Rebound has detected an escaped particle - remove it from simulation
@@ -233,7 +233,8 @@ class BinarySim(object):
         test_coords = self.get_coords("test")
         dist = np.sqrt(np.sum(test_coords**2, axis=-1))
         outside = dist >= self.boundary
-        test_hashes = self.get_active_particle_data("hash")["hash"]
+        test_hashes = self.get_active_particle_data(keys=["hash"],
+                                                    no_bin=True)["hash"]
         for index, test_hash in enumerate(test_hashes[outside]):
             test_particle = self.sim.get_particle_by_hash(int(test_hash))
             pos, vel = reboundparticle_to_array(test_particle)
@@ -253,8 +254,8 @@ class BinarySim(object):
             self.sim.remove(hash=int(test_hash))
                 # selecting from numpy int array does not return python int,
                 # but rather numpy.int32, which fails rebound's type checks
-            self.update_positions() 
             self.escps["number"] += 1
+        self.update_positions() 
 
     def check_for_collision(self):
         """
@@ -280,7 +281,8 @@ class BinarySim(object):
         colliding1[to_check] = dist1_sq < self.radius1**2
         # process collisions
         if np.any(colliding0 | colliding1) > 0:
-            test_hashes = self.get_active_particle_data("hash")["hash"]
+            test_hashes = self.get_active_particle_data(keys=["hash"],
+                                                        no_bin=True)["hash"]
             for bin_hash, colliding in zip([0, 1], [colliding0, colliding1]):
                 bin_pos = binary_coords[bin_hash]
                 for index, test_hash in enumerate(test_hashes[colliding]):
@@ -296,66 +298,8 @@ class BinarySim(object):
                         print ("t={}: removing {} - collision with binary {}"
                                "".format(self.sim.t, test_hash, bin_hash))
                     self.sim.remove(hash=int(test_hash)) # see process_escape
-                    self.update_positions()
                     self.colls["number"] += 1
-
-    def get_active_particle_data(self, *keys):
-        """
-        Returns new arrays holding the data for each particle still in
-        the simulation. keys may be "pos", "vel", or "hash", and the
-        corresponding arrays are returned in dict with the passed key.
-        """
-        outputs = {}
-        for key in keys:
-            if key == "pos":
-                data = self.bucket("coord", "current")
-                self.sim.serialize_particle_data(xyz=data)
-            elif key == "vel":
-                data = self.bucket("coord", "current")
-                self.sim.serialize_particle_data(vxvyvz=data)
-            elif key == "hash":
-                data = self.bucket("hash", "current")
-                self.sim.serialize_particle_data(hash=data)
-            else:
-                raise ValueError("Unrecognized particle data {}".format(key))
-            outputs[key] = data
-        return outputs
-
-    def save_sim(self, filebase=None):
-        """
-        Output simulation data to pickle and plot current trajectories.
-        The passed filename will be used for both pickle and plots,
-        and defaults to the simulation's label attribute.
-        """
-        if filebase is None:
-            filebase = self.label
-        pickle_filename = "{}.p".format(filebase)
-        sim_info = {"mr":self.mr,
-                    "ecc":self.ecc,
-                    "period":self.period,
-                    "bin_sep_max":self.bin_sep_max,
-                    "bin_sep_min":self.bin_sep_min,
-                    "radius0":self.radius0,
-                    "radius1":self.radius1,
-                    "boundary":self.boundary,
-                    "label":self.label,
-                    "colls":self.colls,
-                    "escps":self.escps,
-                    "paths":self.paths,
-                    "cur_pos":self.cur_pos,
-                    "target_time":self.target_time,
-                    "cur_time":self.sim.t,
-                    "initial":self.initial}
-        utl.save_pickle(sim_info, pickle_filename)
-        fig, ax = gb.plot_sim_verbose(self)
-        initial = np.absolute(self.paths["pos"][2:, :, 0]).max()
-        boxes = [initial*1.03, 2.5, self.boundary*1.03] # magic
-        names = ['starting', 'central', 'boundary']
-        for box, name in zip(boxes, names):
-            ax.set_xlim(-box, box) 
-            ax.set_ylim(-box, box)
-            fig.savefig("{}-{}.png".format(filebase, name))
-        plt.close("all")
+            self.update_positions()
 
     def bucket(self, desc, num, shape=None, dtype=None, fill=None):
         """
@@ -400,6 +344,70 @@ class BinarySim(object):
         else:
             raise ValueError("Unrecognized desc {}".format(desc))
         return np.full(shape, fill, dtype=dtype)
+
+    def get_active_particle_data(self, keys=[], no_bin=False):
+        """
+        Returns new arrays holding the data for each particle still in
+        the simulation. keys may be "pos", "vel", or "hash", and the
+        corresponding arrays are returned in dict with the passed key.
+        If no_bin is True, returns data for only the test particles.
+        """
+        outputs = {}
+        if no_bin:
+            hashes = self.get_active_particle_data(["hash"])["hash"]
+            selector = (hashes >= 2)  # get all but the binary 
+        else:
+            selector = np.ones(self.sim.N, dtype=bool)  # get all
+        for key in keys:
+            if key == "pos":
+                data = self.bucket("coord", "current")
+                self.sim.serialize_particle_data(xyz=data)
+            elif key == "vel":
+                data = self.bucket("coord", "current")
+                self.sim.serialize_particle_data(vxvyvz=data)
+            elif key == "hash":
+                data = self.bucket("hash", "current")
+                self.sim.serialize_particle_data(hash=data)
+            else:
+                raise ValueError("Unrecognized particle data {}".format(key))
+            outputs[key] = data[selector]
+        return outputs
+
+    def save_sim(self, filebase=None):
+        """
+        Output simulation data to pickle and plot current trajectories.
+        The passed filename will be used for both pickle and plots,
+        and defaults to the simulation's label attribute.
+        """
+        if filebase is None:
+            filebase = self.label
+        pickle_filename = "{}.p".format(filebase)
+        sim_info = {"mr":self.mr,
+                    "ecc":self.ecc,
+                    "period":self.period,
+                    "bin_sep_max":self.bin_sep_max,
+                    "bin_sep_min":self.bin_sep_min,
+                    "radius0":self.radius0,
+                    "radius1":self.radius1,
+                    "boundary":self.boundary,
+                    "label":self.label,
+                    "colls":self.colls,
+                    "escps":self.escps,
+                    "paths":self.paths,
+                    "cur_pos":self.cur_pos,
+                    "target_time":self.target_time,
+                    "cur_time":self.sim.t,
+                    "initial":self.initial}
+        utl.save_pickle(sim_info, pickle_filename)
+        fig, ax = gb.plot_sim_verbose(self)
+        initial = np.absolute(self.paths["pos"][2:, :, 0]).max()
+        boxes = [initial*1.03, 2.5, self.boundary*1.03] # magic
+        names = ['starting', 'central', 'boundary']
+        for box, name in zip(boxes, names):
+            ax.set_xlim(-box, box) 
+            ax.set_ylim(-box, box)
+            fig.savefig("{}-{}.png".format(filebase, name))
+        plt.close("all")
 
 
 def reboundparticle_to_array(p):
