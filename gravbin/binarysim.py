@@ -217,8 +217,8 @@ class BinarySim(object):
         self.cur_pos = self.get_active_particle_data("pos")["pos"]
             # this generates a new array every time - could instead check the
             # size of cur_pos, and make a new array only if size has changed
-            # (a particle was removed), and otherwise just fill. 
-            # probably an insignificant speed-up though. 
+            # (a particle was removed), and otherwise just re-fill the old 
+            # array. This is probably an insignificant speed-up though. 
 
     def heartbeat(self, internal_sim_object):
         """ This function runs every simulation timestep """
