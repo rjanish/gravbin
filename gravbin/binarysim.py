@@ -159,14 +159,9 @@ class BinarySim(object):
                 container[key] = container[key][:container["number"], ...]
                     # strip off unused entries
         # process paths trackers
-        for key in self.paths:
-            self.paths[key] = np.asarray(self.paths[key])
-            if key == "time":
-                continue
-            self.paths[key] = np.swapaxes(self.paths[key], 0, 1)
-            self.paths[key] = np.swapaxes(self.paths[key], 1, 2)
-                # old axes: (time, particle, coordinate)
-                # new axes: (particle, coordinate, time)
+        if self.recording:
+            for key in self.paths:
+                self.paths[key] = np.asarray(self.paths[key])
 
     def run(self, target_time, record=True):
         """
@@ -183,6 +178,7 @@ class BinarySim(object):
             "pos" -> "vel" gives analogously the velocities. NaNs show
             that the particle has been removed from the simulation. 
         """
+        self.recording = bool(record)
         self.target_time = float(target_time)
         self.allocate_simulation_trackers()
         while self.sim.t < self.target_time:
@@ -198,7 +194,8 @@ class BinarySim(object):
         """ This function runs every simulation timestep """
         self.update_positions()
         self.check_for_collision()
-        self.record()
+        if self.recording:
+            self.record()
 
     def update_positions(self):
         """ Set self.cur_pos with all current particle positions """
@@ -400,7 +397,7 @@ class BinarySim(object):
                     "initial":self.initial}
         utl.save_pickle(sim_info, pickle_filename)
         fig, ax = gb.plot_sim_verbose(self)
-        initial = np.absolute(self.paths["pos"][2:, :, 0]).max()
+        initial = np.absolute(self.paths["pos"][0, 2:, :]).max()
         boxes = [initial*1.03, 2.5, self.boundary*1.03] # magic
         names = ['starting', 'central', 'boundary']
         for box, name in zip(boxes, names):
