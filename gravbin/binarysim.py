@@ -113,72 +113,54 @@ class BinarySim(object):
         self.N_test_start = self.sim.N - 2
         self.iniital = self.get_active_particle_data(["pos", "vel", "hash"])
 
-    def allocate_simulation_trackers(self):
+    def allocate_simulation_trackers(self, pathsize=None):
         """ 
-        Allocate dicts to track particle trajectories, collisions, and
-        escapes.  After all particles have been added and the recording
-        times set, the maximum number of records is known so arrays
-        can be used for storage. The collision and escape arrays will
-        likely contain empty slots after the simulation ends. The
-        'empty' initializing value is np.nan for float and -1 for int.
+        Allocate dicts to track trajectories, collisions, and escapes.
+
+        The maximum number of collisions and escapes is known, so
+        arrays are used, initializing empty values as nan or -1 (for 
+        float or int data). Empty trailing entries will be stripped
+        after integration. 
+
+        Trajectory size is not known (depends on dynamic setting of
+        integration time-step), so lists are used. If simulation is run
+        with a finite page, a maximum list size before writing to disk
+        is calculated here using pathsize. pathsize gives the number
+        of bytes needed to store a particle's state, default being
+        16*dim = (8 bytes per float)*(dim pos floats + dim vel floats).
         """
-        self.colls = {"time":self.bucket("scalar", "all"), 
-                      "bin_pos":self.bucket("coord", "all"), 
-                      "bin_hash":self.bucket("hash", "all"),   
-                      "test_pos":self.bucket("coord", "all"), 
-                      "test_hash":self.bucket("hash", "all"),
-                      "number":0}  
-        self.colls["number"] = 0 
-        self.escps = {"time":self.bucket("scalar", "all"),
-                      "hash":self.bucket("hash", "all"), 
-                      "pos":self.bucket("coord", "all"),
-                      "vel":self.bucket("coord", "all"),
-                      "number":0}
-        self.escps["number"] = 0
-        self.paths = {"pos":[],  "vel":[], "time":[]}
-        bytes_per_record = 48*self.sim.N  # 3 pos + 3 vel, 8 bytes each
-        try:
-            self.records_per_page = int(self.page/bytes_per_record)
-        except OverflowError:  # page is inf
-            self.records_per_page = float("inf")
-        self.record_cntr = 0 # resets at each page write-out
-        self.page_cntr = 0 
-        self.paths_file = h5py.File("{}-paths".format(self.label))
-        self.paths_file.create_group("pos")
-        self.paths_file.create_group("vel")
-        self.paths_file.create_group("time")
+        self.track = {"colls":{"time":self.bucket("scalar", "all"), 
+                               "bin_pos":self.bucket("coord", "all"), 
+                               "bin_hash":self.bucket("hash", "all"),   
+                               "test_pos":self.bucket("coord", "all"), 
+                               "test_hash":self.bucket("hash", "all"),
+                               "number":0},
+                      "escps":{"time":self.bucket("scalar", "all"),
+                               "hash":self.bucket("hash", "all"), 
+                               "pos":self.bucket("coord", "all"),
+                               "vel":self.bucket("coord", "all"),
+                               "number":0}}
+        if self.recording:
+            self.track["paths"] = {"pos":[],  "vel":[], "time":[]}
+            if pathsize is None:
+                pathsize = 16*self.space_dim
+            else
+                pathsize = int(pathsize)
+            bytes_per_record = pathsize*self.sim.N
+            try:
+                self.records_per_page = int(self.page/bytes_per_record)
+            except OverflowError:  # page is inf
+                self.records_per_page = float("inf")
+            self.record_cntr = 0 # resets at each page write-out
+            self.page_cntr = 0 
 
-    def record(self):
-        """ Save all particle states to memory; updates paths attribute """
-        current = self.get_active_particle_data(["pos", "vel", "hash"])
-        # fill data into containers for all particles, including coll/escp
-        all_pos = self.bucket("coord", "all")
-        all_pos[current["hash"]] = current["pos"]
-        all_vel = self.bucket("coord", "all")
-        all_vel[current["hash"]] = current["vel"]   
-            # bucket fills np.nan --> escp/coll particles are recorded as nan  
-        self.paths["pos"].append(all_pos)
-        self.paths["vel"].append(all_vel)
-        self.paths["time"].append(self.sim.t)
-        self.record_cntr += 1
-
-    def process_event_containters(self):
-        """ Reorganize outputs, remove empty data, etc """
-        for container in [self.colls, self.escps]:
+    def create_output_file(self):
+        """ make h5py structure to hold events and paths """
+        self.file = h5py.File(self.label)
+        for name, container in self.track.iteritems():
+            self.file.create_group(name)
             for key in container:
-                if key is "number": 
-                    continue # number is only entry without possible empties
-                container[key] = container[key][:container["number"], ...]
-                    # strip off unused entries
-
-    def output_paths_tracker(self):
-        """ empty contents of path attribute to disk """
-        for key in self.paths:
-            self.paths_file[key].create_dataset(str(self.page_cntr),
-                                                data=self.paths[key])
-            self.paths[key] = []
-        self.record_cntr = 0 # resets at each page write-out
-        self.page_cntr += 1 
+                self.file[name].create_group(key) # subgroup /name/key
 
     def run(self, target_time, record=True, page="inf"):
         """
@@ -202,6 +184,7 @@ class BinarySim(object):
         self.recording = bool(record)
         self.page = float(page)
         self.allocate_simulation_trackers()
+        self.create_output_file()
         while self.sim.t < self.target_time:
             try:
                 self.sim.integrate(self.target_time) 
@@ -209,7 +192,9 @@ class BinarySim(object):
                 self.process_escape()
                 if self.sim.N == 2:  # all test particles have been removed
                     break
-        self.process_event_containters()
+        if recording:
+            self.empty_and_write_paths()
+        self.process_and_write_events()
 
     def heartbeat(self, internal_sim_object):
         """ This function runs every simulation timestep """
@@ -218,7 +203,7 @@ class BinarySim(object):
         if self.recording:
             self.record()
             if self.record_cntr > self.records_per_page:
-                self.output_paths_tracker()
+                self.empty_and_write_paths()
 
     def update_positions(self):
         """ Set self.cur_pos with all current particle positions """
@@ -228,7 +213,7 @@ class BinarySim(object):
             # (a particle was removed), and otherwise just re-fill the old 
             # array. This is probably an insignificant speed-up though. 
 
-    def get_coords(self, target):
+    def read_cur_coords(self, target):
         """ 
         Returns array of target particles' xyz coordinates. Target can
         be either 'binary' or 'test' to fetch the binary's coordinates
@@ -250,7 +235,7 @@ class BinarySim(object):
         """ 
         Rebound has detected an escaped particle - remove it from simulation
         """
-        test_coords = self.get_coords("test")
+        test_coords = self.read_cur_coords("test")
         dist = np.sqrt(np.sum(test_coords**2, axis=-1))
         outside = dist >= self.boundary
         test_hashes = self.get_active_particle_data(keys=["hash"],
@@ -264,17 +249,18 @@ class BinarySim(object):
                 msg = ("time {}: particle {} exited the simulation "
                        "on a *bound* orbit".format(self.sim.t, test_hash))
                 warnings.warn(msg, RuntimeWarning)
-            self.escps["time"][self.escps["number"]] = self.sim.t
-            self.escps["hash"][self.escps["number"]] = test_hash
-            self.escps["pos"][self.escps["number"]] = pos
-            self.escps["vel"][self.escps["number"]] = vel
+            cur_escp_num = self.track["escps"]["number"]
+            self.track["escps"]["time"][cur_escp_num] = self.sim.t
+            self.track["escps"]["hash"][cur_escp_num] = test_hash
+            self.track["escps"]["pos"][cur_escp_num] = pos
+            self.track["escps"]["vel"][cur_escp_num] = vel
             if self.verbose:
                 print ("t={}: removing {} - escape"
                        "".format(self.sim.t, test_hash))
             self.sim.remove(hash=int(test_hash))
                 # selecting from numpy int array does not return python int,
                 # but rather numpy.int32, which fails rebound's type checks
-            self.escps["number"] += 1
+            self.track["escps"]["number"] += 1
         self.update_positions() 
 
     def check_for_collision(self):
@@ -282,8 +268,8 @@ class BinarySim(object):
         Check for test particle + binary collisions, record and remove
         from the simulation.
         """
-        test_coords = self.get_coords("test")
-        binary_coords = self.get_coords("binary")
+        test_coords = self.read_cur_coords("test")
+        binary_coords = self.read_cur_coords("binary")
         # check all test particles against binary member 0
         dist0_sq = np.sum((test_coords - binary_coords[0])**2, axis=-1)
         colliding0 = dist0_sq < self.radius0**2
@@ -307,19 +293,54 @@ class BinarySim(object):
                 bin_pos = binary_coords[bin_hash]
                 for index, test_hash in enumerate(test_hashes[colliding]):
                     # record collision
-                    self.colls["time"][self.colls["number"]] = self.sim.t
-                    self.colls["test_hash"][self.colls["number"]] = test_hash
+                    cur_col_num = self.track["colls"]["number"]
+                    self.track["colls"]["time"][cur_col_num] = self.sim.t
+                    self.track["colls"]["test_hash"][cur_col_num] = test_hash
                     test_pos = test_coords[colliding][index]
-                    self.colls["test_pos"][self.colls["number"]] = test_pos
-                    self.colls["bin_hash"][self.colls["number"]] = bin_hash
-                    self.colls["bin_pos"][self.colls["number"]] = bin_pos
+                    self.track["colls"]["test_pos"][cur_col_num] = test_pos
+                    self.track["colls"]["bin_hash"][cur_col_num] = bin_hash
+                    self.track["colls"]["bin_pos"][cur_col_num] = bin_pos
                     # remove colliding particle
                     if self.verbose:
                         print ("t={}: removing {} - collision with binary {}"
                                "".format(self.sim.t, test_hash, bin_hash))
                     self.sim.remove(hash=int(test_hash)) # see process_escape
-                    self.colls["number"] += 1
+                    self.track["colls"]["number"] += 1
             self.update_positions()
+
+    def record(self):
+        """ Save all particle states to memory; updates paths attribute """
+        current = self.get_active_particle_data(["pos", "vel", "hash"])
+        # fill data into containers for all particles, including coll/escp
+        for name in ["pos", "vel"]:
+            all_data = self.bucket("coord", "all")
+            all_data[current["hash"]] = current[name]
+                # bucket fills np.nan --> escp/coll particles recorded as nan  
+            self.track["paths"][name].append(all_data)
+        self.track["paths"]["time"].append(self.sim.t)
+        self.record_cntr += 1
+
+    def process_and_write_events(self):
+        """ remove empty data and write to disk """
+        for name, container in self.track.iteritems():
+            if name == "paths":
+                continue
+            for key in container:
+                if key is not "number": # only entry without possible empties
+                    container[key] = container[key][:container["number"], ...]
+                        # strip off unused entries
+                self.file[name][key].create_dataset(key, data=container[key], 
+                                                    compression="gzip")
+
+    def empty_and_write_paths(self):
+        """ empty contents of path attribute to disk """
+        page_id = str(self.page_cntr)
+        for key, data in self.track["paths"].iteritems():
+            self.file["paths"][key].create_dataset(page_id, data=data, 
+                                                   compression="gzip")
+            self.track["paths"][key] = [] # empty from memory
+        self.record_cntr = 0 # resets at each page write-out
+        self.page_cntr += 1 
 
     def bucket(self, desc, num=None, shape=None, dtype=None, fill=None):
         """
@@ -414,16 +435,16 @@ class BinarySim(object):
                     "radius1":self.radius1,
                     "boundary":self.boundary,
                     "label":self.label,
-                    "colls":self.colls,
-                    "escps":self.escps,
-                    "paths":self.paths,
+                    "colls":self.track["colls"],
+                    "escps":self.track["escps"],
+                    "paths":self.track["paths"],
                     "cur_pos":self.cur_pos,
                     "target_time":self.target_time,
                     "cur_time":self.sim.t,
                     "initial":self.initial}
         utl.save_pickle(sim_info, pickle_filename)
         fig, ax = gb.plot_sim_verbose(self)
-        initial = np.absolute(self.paths["pos"][0, 2:, :]).max()
+        initial = np.absolute(self.track["paths"]["pos"][0, 2:, :]).max()
         boxes = [initial*1.03, 2.5, self.boundary*1.03] # magic
         names = ['starting', 'central', 'boundary']
         for box, name in zip(boxes, names):
