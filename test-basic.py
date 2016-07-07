@@ -18,13 +18,13 @@ import matplotlib.pyplot as plt
 import gravbin as gb
 
 
-# import cProfile
-# pr = cProfile.Profile()
+import cProfile
+pr = cProfile.Profile()
 
 bin_radius = 0.1
 test_start_distance = bin_radius*2.5
-test_vels = [0.2, 1.6]
-num_tests = 400  # per direction, per binary
+test_vels = [0.7, 1.8]
+num_tests = 10000  # per direction, per binary
 mass_ratio = 0.5
 ecc = 0.0
 orbits = 10
@@ -41,8 +41,8 @@ for binary_start in [bin0_start, bin1_start]:
         pos = binary_start + test_start_distance*random_dirs
         vel = start_vel*random_dirs
         test_sim.add_test_particles(pos, vel)
-# pr.enable()
-test_sim.run(final_time)
-# pr.disable()
+pr.enable()
+test_sim.run(final_time, page=8*2**30, record=False)
+pr.disable()
 # test_sim.save_sim()
-# pr.print_stats(sort="time")
+pr.print_stats(sort="time")

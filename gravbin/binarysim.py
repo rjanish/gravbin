@@ -144,7 +144,7 @@ class BinarySim(object):
             self.track["paths"] = {"pos":[],  "vel":[], "time":[]}
             if pathsize is None:
                 pathsize = 16*self.space_dim
-            else
+            else:
                 pathsize = int(pathsize)
             bytes_per_record = pathsize*self.sim.N
             try:
@@ -156,11 +156,13 @@ class BinarySim(object):
 
     def create_output_file(self):
         """ make h5py structure to hold events and paths """
-        self.file = h5py.File(self.label)
+        output_filename = "{}.hdf5".format(self.label)
+        self.file = h5py.File(output_filename, "w")  # overwrites existing
         for name, container in self.track.iteritems():
             self.file.create_group(name)
-            for key in container:
-                self.file[name].create_group(key) # subgroup /name/key
+            if name == 'paths':
+                for key in container:
+                    self.file[name].create_group(key) # subgroup /paths/key
 
     def run(self, target_time, record=True, page="inf"):
         """
@@ -192,9 +194,10 @@ class BinarySim(object):
                 self.process_escape()
                 if self.sim.N == 2:  # all test particles have been removed
                     break
-        if recording:
-            self.empty_and_write_paths()
+        if self.recording:
+            self.write_paths()
         self.process_and_write_events()
+        self.file.close()
 
     def heartbeat(self, internal_sim_object):
         """ This function runs every simulation timestep """
@@ -203,7 +206,9 @@ class BinarySim(object):
         if self.recording:
             self.record()
             if self.record_cntr > self.records_per_page:
-                self.empty_and_write_paths()
+                self.write_paths()
+                for key in self.track["paths"]:
+                    self.track["paths"][key] = [] # empty from memory
 
     def update_positions(self):
         """ Set self.cur_pos with all current particle positions """
@@ -321,24 +326,23 @@ class BinarySim(object):
         self.record_cntr += 1
 
     def process_and_write_events(self):
-        """ remove empty data and write to disk """
+        """ remove empty event data and write to disk """
         for name, container in self.track.iteritems():
-            if name == "paths":
+            if name == "paths": # paths written separately, in pages
                 continue
             for key in container:
-                if key is not "number": # only entry without possible empties
-                    container[key] = container[key][:container["number"], ...]
-                        # strip off unused entries
-                self.file[name][key].create_dataset(key, data=container[key], 
-                                                    compression="gzip")
+                if key is "number": # number is superfluous and annoys h5py
+                    continue
+                container[key] = container[key][:container["number"], ...]
+                self.file[name].create_dataset(key, data=container[key], 
+                                               compression="gzip")
 
-    def empty_and_write_paths(self):
-        """ empty contents of path attribute to disk """
+    def write_paths(self):
+        """ write contents of path attribute to disk """
         page_id = str(self.page_cntr)
         for key, data in self.track["paths"].iteritems():
             self.file["paths"][key].create_dataset(page_id, data=data, 
                                                    compression="gzip")
-            self.track["paths"][key] = [] # empty from memory
         self.record_cntr = 0 # resets at each page write-out
         self.page_cntr += 1 
 
