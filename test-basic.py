@@ -42,7 +42,7 @@ for binary_start in [bin0_start, bin1_start]:
         vel = start_vel*random_dirs
         test_sim.add_test_particles(pos, vel)
 pr.enable()
-test_sim.run(final_time, page=8*2**30, record=False)
+test_sim.run(final_time, page=7*2**30, record=True)
 pr.disable()
 # test_sim.save_sim()
 pr.print_stats(sort="time")
