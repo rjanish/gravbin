@@ -115,8 +115,9 @@ def find_jacobi_barriers(jacobi, theta, phi, mr):
 
 def barrier_in_plane(jacobi, normal, mr, res=10**2):
     """
-    Returns a 2d array (r, phi) giving the zero-velocity barrier in 
-    the plane orthogonal to the passed normal.
+    Returns a 2d array shape (res, 3), giving res samples in spherical
+    coordinates of the zero-velocity barrier in the plane orthogonal
+    to the passed normal.
     """
     xy_uc = np.ones((res, 3)) # unit semi-circle in xy plane, spherical coords
     xy_uc[:, 1] = np.pi/2
@@ -133,7 +134,7 @@ def barrier_in_plane(jacobi, normal, mr, res=10**2):
             # unit circle in desired plane, spherical coordinates
     else: 
         desired_uc = xy_uc # already in correct plane
-    barriers = np.zeros((res*5, 3))  # at most, 5 barriers per direction
+    barriers = np.zeros((res*6, 3))  # at most, 6 barriers per direction
     num_barriers = 0
     for theta, phi in desired_uc[:, 1:]:
         found = find_jacobi_barriers(jacobi, theta, phi, mr)
@@ -144,3 +145,41 @@ def barrier_in_plane(jacobi, normal, mr, res=10**2):
         num_barriers += num_found
     barriers = barriers[:num_barriers, :]
     return barriers
+
+
+def barrier_cutout(jacobi, mr, res=10**3):
+    """
+    Sample the y > 0 hemisphere of the Jacobi zero-velocity barrier
+    """
+    zplus = np.ones((res, 3)) # unit z > 0 hemisphere, spherical coords
+    zplus[:, 1], zplus[:, 2] = utl.draw_from_hemisphere(res)
+    angle = -np.pi/2
+    axis = np.array([1, 0, 0]) # rotate samples to y > 0 hemisphere
+    zplus_cart = utl.spherical_to_cart(zplus)
+    yplus_cart = utl.rotate3d(zplus_cart, angle, axis)
+    yplus = utl.cart_to_spherical(yplus_cart)
+    inner_barriers = np.zeros((res*3, 3))  # at most, 3 inner barriers
+    outer_barriers = np.zeros((res, 3))  # at most, 1 outer barrier
+    num_inner, num_outer = 0, 0
+    for theta, phi in yplus[:, 1:]:
+        found = find_jacobi_barriers(jacobi, theta, phi, mr)
+        y_coord = found*np.sin(theta)*np.sin(phi)
+        found = found[y_coord >= 0.1] # cut out xz plane 
+        total_found = len(found)
+        if total_found == 0:
+            continue
+        outer = max(found)
+        outer_barriers[num_outer, 0] = outer
+        outer_barriers[num_outer, 1] = theta
+        outer_barriers[num_outer, 2] = phi
+        num_outer += 1
+        num_inner_found = total_found - 1
+        if num_inner_found > 0:
+            inners = np.sort(found)[:-1]
+            inner_barriers[num_inner:num_inner+num_inner_found, 0] = inners
+            inner_barriers[num_inner:num_inner+num_inner_found, 1] = theta
+            inner_barriers[num_inner:num_inner+num_inner_found, 2] = phi
+            num_inner += num_inner_found
+    outer_barriers = utl.spherical_to_cart(outer_barriers[:num_outer, :])
+    inner_barriers = utl.spherical_to_cart(inner_barriers[:num_inner, :])
+    return inner_barriers, outer_barriers
