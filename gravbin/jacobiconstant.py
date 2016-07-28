@@ -23,7 +23,7 @@ def v_eff(r, theta, phi, mr):
                      (1.0 - chi**2)*(mr - 1.0)**2)
     delta1 = np.sqrt((r - mr*chi)**2 + (1.0 - chi**2)*mr**2)
         # distance to the first (most massive) and second binary members
-    return -r**2 - mr/delta0 - (1.0 - mr)/delta1
+    return -r**2 - 2*mr/delta0 - 2*(1.0 - mr)/delta1
 
 
 def find_jacobi_extrema(theta, phi, mr):
@@ -59,7 +59,20 @@ def find_jacobi_extrema(theta, phi, mr):
     v_eff_r = lambda r: v_eff(r, theta, phi, mr) 
     peaks = np.array(extrema)[:, 0] # peak locations
     intervals = zip(peaks[:-1], peaks[1:]) # valleys are between peaks
+    hole0, hole1 = (mr - 1.0)*chi, mr*chi # loc of possible singularities
     for interval in intervals:
+        if np.isclose(mr, 1.0) and utl.in_linear_interval(hole0, interval):
+            # when mr = 1, heavier star is at the origin and all directions
+            # pass through the star => singularity at 0
+            extrema.append([hole0, -np.inf])
+            continue
+        if (np.isclose(chi, 1.0) and 
+            utl.in_linear_interval([hole0, hole1], interval).any()):
+            # when chi = 1, direction is along x-axis and passed though both
+            # stars => singularity at both holes 
+            extrema.append([hole0, -np.inf])
+            extrema.append([hole1, -np.inf])
+            continue
         out = utl.find_local_min(v_eff_r, interval, rtol=10**-4)
         if out is not None:
             extrema.append(out)
@@ -98,3 +111,36 @@ def find_jacobi_barriers(jacobi, theta, phi, mr):
         root = opt.brentq(root_func, *interval)
         roots.append(root)
     return np.asarray(roots)
+
+
+def barrier_in_plane(jacobi, normal, mr, res=10**2):
+    """
+    Returns a 2d array (r, phi) giving the zero-velocity barrier in 
+    the plane orthogonal to the passed normal.
+    """
+    xy_uc = np.ones((res, 3)) # unit semi-circle in xy plane, spherical coords
+    xy_uc[:, 1] = np.pi/2
+    xy_uc[:, 2] = np.linspace(0, np.pi, res)
+    xy_normal = np.array([0, 0, 1])
+    desired_normal = np.asarray(normal)
+    desired_normal = desired_normal/np.sqrt(np.sum(desired_normal**2))
+    angle = np.arccos(np.dot(xy_normal, desired_normal))
+    axis = np.cross(desired_normal, xy_normal)
+    if angle > 0:
+        xy_uc_cart = utl.spherical_to_cart(xy_uc)
+        desired_uc_cart = utl.rotate3d(xy_uc_cart, angle, axis)
+        desired_uc = utl.cart_to_spherical(desired_uc_cart)
+            # unit circle in desired plane, spherical coordinates
+    else: 
+        desired_uc = xy_uc # already in correct plane
+    barriers = np.zeros((res*5, 3))  # at most, 5 barriers per direction
+    num_barriers = 0
+    for theta, phi in desired_uc[:, 1:]:
+        found = find_jacobi_barriers(jacobi, theta, phi, mr)
+        num_found = len(found)
+        barriers[num_barriers:num_barriers+num_found, 0] = found
+        barriers[num_barriers:num_barriers+num_found, 1] = theta
+        barriers[num_barriers:num_barriers+num_found, 2] = phi
+        num_barriers += num_found
+    barriers = barriers[:num_barriers, :]
+    return barriers
