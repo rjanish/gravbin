@@ -26,7 +26,7 @@ def v_eff(r, theta, phi, mr):
     return -r**2 - 2*mr/delta0 - 2*(1.0 - mr)/delta1
 
 
-def find_jacobi_extrema(theta, phi, mr):
+def find_jacobi_extrema(theta, phi, mr, atol=10**-6):
     """
     Returns the local minima and maxima over radius of the effective
     potential for a fixed direction in the co-rotating frame.  Inputs
@@ -41,17 +41,19 @@ def find_jacobi_extrema(theta, phi, mr):
     peaks are spaced between the effective star positions. See notes.
     """
     chi = np.sin(theta)*np.cos(phi)  # encodes angular position
+    if np.isclose(mr, 1.0):
+        # use analytic result
+        return np.array([[-1.0, -3.0], [0.0, -np.inf], [1.0, -3.0]])
     extrema = []
     # find peaks
     minus_v_eff_r = lambda r: -v_eff(r, theta, phi, mr) # max -> min
     dips = np.asarray([(mr - 1)*chi, mr*chi]) # star locations
     dips.sort()
-    intervals = [[-1.5, dips[0]], [dips[0], dips[1]], [dips[1], 1.5]]
-        # at most three peaks: always one outside each star yet closer than
-        # 1.5, and possible another between the two stars. 
+    intervals = [[-1.5, dips[0]], [dips[0], dips[1]],[dips[1], 1.5]]
+        # at most three peaks: always one outside or at each star yet within
+        # radius of 1.5, and possible another between the two stars. 
     for interval in intervals:
-        out = utl.find_local_min(minus_v_eff_r, interval, rtol=10**-4) 
-            # scipy 'bounded Brent' tol default is 10^-5, hopefully enough
+        out = utl.find_local_min(minus_v_eff_r, interval, atol) 
         if out is not None:  # above returns None if no minimum is found
             pos, value = out # [radius, min function value]
             extrema.append([pos, -value]) # min -> max
@@ -66,14 +68,16 @@ def find_jacobi_extrema(theta, phi, mr):
             # pass through the star => singularity at 0
             extrema.append([hole0, -np.inf])
             continue
-        if (np.isclose(chi, 1.0) and 
-            utl.in_linear_interval([hole0, hole1], interval).any()):
+        if np.isclose(chi, 1.0):
             # when chi = 1, direction is along x-axis and passed though both
-            # stars => singularity at both holes 
-            extrema.append([hole0, -np.inf])
-            extrema.append([hole1, -np.inf])
-            continue
-        out = utl.find_local_min(v_eff_r, interval, rtol=10**-4)
+            # stars => singularity at both holes
+            if utl.in_linear_interval(hole0, interval):
+                extrema.append([hole0, -np.inf])
+                continue
+            if utl.in_linear_interval(hole1, interval):
+                extrema.append([hole1, -np.inf])
+                continue
+        out = utl.find_local_min(v_eff_r, interval, atol)
         if out is not None:
             extrema.append(out)
     extrema = np.asarray(extrema)
