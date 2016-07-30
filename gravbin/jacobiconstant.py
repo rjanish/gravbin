@@ -9,6 +9,32 @@ import scipy.optimize as opt
 import utilities as utl
 
 
+def jacobi_corotating(v, r, theta, phi, mr):
+    """ Jacobi constant in the co-rotating frame """
+    return v**2 + v_eff(r, theta, phi, mr)
+
+
+def jacobi_inert_asymp(x, y, z, v_x, v_y, v_z):
+    """
+    Return the Jacobi constant in the inertial frame, assuming the
+    particle's distant to be large enough that any contributions from 
+    the potential of the stars can be ignored. Input is the Cartesian
+    position and velocity.
+
+    In the inertial frame I use the Jacobi constant:
+        J = 2(E - L_z)/m
+          = v^2 - 2 [\vec{r} \cross \vec{v}]_z for r -> infinity
+    """
+    pos, vel = [x, y, z], [v_x, v_y, v_z]
+    return np.sum(vel**2) - 2*np.cross(pos, vel)
+
+
+def jacobi_scattering(x, y, z, v_x, v_y, v_z):
+    """
+    """
+    pass
+
+
 def v_eff(r, theta, phi, mr):
     """
     The effective potential in the co-rotating frame. The stars are
@@ -47,7 +73,7 @@ def find_jacobi_extrema(theta, phi, mr, atol=10**-6):
     extrema = []
     # find peaks
     minus_v_eff_r = lambda r: -v_eff(r, theta, phi, mr) # max -> min
-    dips = np.asarray([(mr - 1)*chi, mr*chi]) # star locations
+    dips = np.asarray([(mr - 1.0)*chi, mr*chi]) # star locations
     dips.sort()
     intervals = [[-1.5, dips[0]], [dips[0], dips[1]],[dips[1], 1.5]]
         # at most three peaks: always one outside or at each star yet within
