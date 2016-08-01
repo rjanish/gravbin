@@ -29,10 +29,14 @@ def jacobi_inert_asymp(x, y, z, v_x, v_y, v_z):
     return np.sum(vel**2) - 2*np.cross(pos, vel)
 
 
-def jacobi_scattering(x, y, z, v_x, v_y, v_z):
+def jacobi_scattering(b, v, theta, phi):
     """
+    Jacobi constant of particles incident from x = - infinity, with y-
+    position b, velocity v, and velocity direction theta, the angle
+    between the velocity and the z-axis. I assume that v_y = 0 and
+    v_x > 0 (if not, could always rotate it so).
     """
-    pass
+    return v**2 + 2*b*v*np.sin(theta)
 
 
 def v_eff(r, theta, phi, mr):
@@ -44,12 +48,23 @@ def v_eff(r, theta, phi, mr):
     are spherical coordinates and the mass ratio mr, the ratio of the
     larger star mass to the total mass (mr in [0.5, 1]).
     """
+    r = np.asarray(r, dtype=float)
+    mr = float(mr)
     chi = np.sin(theta)*np.cos(phi)  # encodes angular position
-    delta0 = np.sqrt((r - (mr - 1.0)*chi)**2 + 
-                     (1.0 - chi**2)*(mr - 1.0)**2)
-    delta1 = np.sqrt((r - mr*chi)**2 + (1.0 - chi**2)*mr**2)
+    if np.isclose(mr, 1.0): # only one star
+        return -r**2.0 - 2.0/np.absolute(r)
+    elif np.isclose(chi, 0.0): # along y or z axis
+        delta0 = np.sqrt(r**2 + (mr - 1.0)**2)
+        delta1 = np.sqrt(r**2 + mr**2)
         # distance to the first (most massive) and second binary members
-    return -r**2 - 2*mr/delta0 - 2*(1.0 - mr)/delta1
+    elif np.isclose(chi, 1.0): # along x axis
+        delta0 = np.absolute(r - (mr - 1.0))
+        delta1 = np.absolute(r - mr)
+    else: 
+        delta0 = np.sqrt((r - (mr - 1.0)*chi)**2 + 
+                         (1.0 - chi**2)*(mr - 1.0)**2)
+        delta1 = np.sqrt((r - mr*chi)**2 + (1.0 - chi**2)*mr**2)
+    return -r**2.0 - 2.0*mr/delta0 - 2.0*(1.0 - mr)/delta1
 
 
 def find_jacobi_extrema(theta, phi, mr, atol=10**-6):
@@ -132,10 +147,25 @@ def find_jacobi_barriers(jacobi, theta, phi, mr):
         interval = np.sort([loc, np.sign(loc)*guess])
         intervals.append(interval)
     # find central intervals
-    possible_intervals = zip(extrema[:-1, 0], extrema[1:, 0])
-    for left, right in possible_intervals:
-        if np.sign(root_func(left)) != np.sign(root_func(right)):
-            intervals.append([left, right]) # sign change => root
+    trial_intervals = np.array(zip(extrema[:-1], extrema[1:]))
+        # 3D array: intervals, endpoints, radius/veff 
+    for entry in trial_intervals:
+        interval = entry[:, 0]
+        root_func_interval = jacobi - entry[:, 1] # root_func = J - v_eff
+        if np.sign(root_func_interval[0]) != np.sign(root_func_interval[1]):
+            # sign change => root
+            singular = np.isinf(root_func_interval)
+            if singular.any():
+                singularity = interval[singular]
+                midpoint = 0.5*np.sum(interval)
+                interval[singular] = midpoint
+                    # cut interval in half, removing the side with a singular
+                    # endpoint (note: there can only be one singular endpoint)
+                while (np.sign(root_func(interval[0])) == 
+                       np.sign(root_func(interval[1]))):
+                       # root was removed, expand to singularity to recover
+                    interval[singular] += (interval[singular] + singularity)/2
+            intervals.append(interval) 
     roots = []
     for interval in intervals:
         root = opt.brentq(root_func, *interval)
