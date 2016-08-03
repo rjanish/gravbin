@@ -29,14 +29,14 @@ def jacobi_inert_asymp(x, y, z, v_x, v_y, v_z):
     return np.sum(vel**2) - 2*np.cross(pos, vel)
 
 
-def jacobi_scattering(b, v, theta, phi):
-    """
-    Jacobi constant of particles incident from x = - infinity, with y-
-    position b, velocity v, and velocity direction theta, the angle
-    between the velocity and the z-axis. I assume that v_y = 0 and
-    v_x > 0 (if not, could always rotate it so).
-    """
-    return v**2 + 2*b*v*np.sin(theta)
+# def jacobi_scattering(b, v, theta, phi):
+#     """
+#     Jacobi constant of particles incident from x = - infinity, with y-
+#     position b, velocity v, and velocity direction theta, the angle
+#     between the velocity and the z-axis. I assume that v_y = 0 and
+#     v_x > 0 (if not, could always rotate it so).
+#     """
+#     return v**2 + 2*b*v*np.sin(theta)
 
 
 def v_eff(r, theta, phi, mr):
